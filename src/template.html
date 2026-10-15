@@ -1,0 +1,287 @@
+<title>AIoT Regression Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="CRISP-DM 回歸實驗室：台積電 2330.TW 自我迴歸股價預測 與 50 Startups 多元線性回歸特徵選擇，可輸入任意 CSV 資料集。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>/*CSS*/</style>
+
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">β</span>
+      <div>
+        <div class="brand-name">AIoT Regression Lab</div>
+        <div class="brand-sub">DO In-Class 2 · CRISP-DM · 多元回歸</div>
+      </div>
+    </div>
+    <label class="problem-pick" for="problem">
+      <span class="eyebrow">Problem</span>
+      <select id="problem">
+        <option value="ar">Problem 1｜台積電 2330.TW 股價預測（AR）</option>
+        <option value="mlr" selected>Problem 2｜50 Startups 多元線性回歸（MLR）</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 資料集列 -->
+  <section class="dataset" aria-labelledby="ds-title">
+    <div class="ds-head">
+      <h2 id="ds-title">資料集</h2>
+      <p class="ds-note" id="ds-hint">貼上任意 CSV 網址（GitHub raw、gist…）或上傳檔案，整頁會用新資料重新跑完六個 CRISP-DM 步驟。</p>
+    </div>
+    <form class="ds-row" id="ds-form">
+      <label class="sr" for="ds-url">CSV 網址</label>
+      <input id="ds-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://raw.githubusercontent.com/…/data.csv">
+      <button type="submit" class="btn primary" id="ds-load">載入網址</button>
+      <label class="btn ghost file-btn" for="ds-file">上傳 CSV<input id="ds-file" type="file" accept=".csv,text/csv,text/plain"></label>
+    </form>
+    <div class="chips" id="ds-chips"></div>
+    <div class="ds-row stock-row" id="stock-row" hidden>
+      <label for="stock-id" class="inline-label">台股代號</label>
+      <input id="stock-id" type="text" value="2330" maxlength="6" inputmode="numeric" class="short">
+      <label for="stock-days" class="inline-label">期間</label>
+      <select id="stock-days" class="short">
+        <option value="365">近 1 年</option>
+        <option value="730">近 2 年</option>
+        <option value="1095">近 3 年</option>
+      </select>
+      <button type="button" class="btn ghost" id="stock-live">即時抓取（FinMind API）</button>
+    </div>
+    <p class="status" id="ds-status" role="status"></p>
+  </section>
+
+  <!-- ===================== Problem 2：MLR ===================== -->
+  <div id="panel-mlr">
+    <section class="step">
+      <div class="step-label"><span class="step-no">1</span><span>Business <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>商業理解</h3>
+        <p class="lead" id="m-biz"></p>
+        <div class="field-row">
+          <label for="m-target">目標變數 y</label>
+          <select id="m-target"></select>
+          <span class="hint">預設選 <code>Profit</code>；換成任意資料集時自動選最後一個數值欄。</span>
+        </div>
+        <ul class="criteria">
+          <li><b>成功標準</b>：測試集 R² 高、RMSE / MAE 低，且模型不過度擬合（訓練與測試誤差差距小）。</li>
+          <li><b>利害關係人</b>：決定研發、行銷、行政預算配置的經營團隊與分析師。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">2</span><span>Data <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>資料理解</h3>
+        <div class="kpis" id="m-kpis"></div>
+        <h4>前 8 筆資料</h4>
+        <div class="tscroll"><table class="data" id="m-head"></table></div>
+        <h4>欄位統計</h4>
+        <div class="tscroll"><table class="data" id="m-describe"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>各特徵與 <span class="tname"></span> 的相關係數 r</figcaption><div class="cv"><canvas id="c-corr"></canvas></div></figure>
+          <figure class="chart-box"><figcaption id="m-scatter-cap">最強特徵 vs 目標</figcaption><div class="cv"><canvas id="c-scatter"></canvas></div></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">3</span><span>Data <br>Preparation</span></div>
+      <div class="step-body">
+        <h3>資料準備</h3>
+        <div class="controls">
+          <div class="ctl">
+            <label for="m-test">測試集比例 <output id="m-test-out">20%</output></label>
+            <input id="m-test" type="range" min="0.1" max="0.4" step="0.05" value="0.2">
+          </div>
+          <div class="ctl">
+            <label for="m-seed">random_state</label>
+            <input id="m-seed" type="number" min="0" max="4294967295" step="1" value="0" class="short">
+          </div>
+        </div>
+        <ol class="prep" id="m-prep"></ol>
+        <details class="code">
+          <summary>對應的 Python（sklearn）程式碼</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="m-code">複製</button></div>
+          <pre id="m-code"></pre>
+        </details>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">4</span><span>Modeling</span></div>
+      <div class="step-body">
+        <h3>建模：特徵選擇 + OLS</h3>
+        <div class="seg" id="m-algos" role="tablist" aria-label="特徵選擇演算法"></div>
+        <div class="controls">
+          <div class="ctl">
+            <label for="m-crit">挑選準則</label>
+            <select id="m-crit">
+              <option value="cv">5-fold CV RMSE（只用訓練集）</option>
+              <option value="test">Test RMSE（課堂筆記做法）</option>
+            </select>
+          </div>
+          <div class="ctl grow" id="m-k-wrap">
+            <label for="m-k">特徵數 k = <output id="m-k-out">2</output></label>
+            <input id="m-k" type="range" min="1" max="5" step="1" value="2">
+          </div>
+        </div>
+        <p class="note" id="m-algo-note"></p>
+        <div class="tscroll"><table class="data results" id="m-results"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>RMSE by Number of Features</figcaption><div class="cv"><canvas id="c-rmse"></canvas></div></figure>
+          <figure class="chart-box"><figcaption>R-squared by Number of Features</figcaption><div class="cv"><canvas id="c-r2"></canvas></div></figure>
+        </div>
+        <p class="callout" id="m-fit-verdict"></p>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">5</span><span>Evaluation</span></div>
+      <div class="step-body">
+        <h3>評估 <span class="sub" id="m-eval-title"></span></h3>
+        <div class="kpis" id="m-metrics"></div>
+        <div class="equation" id="m-eq"></div>
+        <h4>迴歸係數（訓練集 OLS 推論）</h4>
+        <div class="tscroll"><table class="data" id="m-coef"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>Actual vs Predicted（測試集）</figcaption><div class="cv"><canvas id="c-avp"></canvas></div></figure>
+          <div>
+            <h4 class="mt0">測試集殘差 Top 10</h4>
+            <div class="tscroll"><table class="data" id="m-resid"></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">6</span><span>Deployment</span></div>
+      <div class="step-body">
+        <h3>部署：即時預測</h3>
+        <div class="predict">
+          <form id="m-pred-form" class="pred-form"></form>
+          <div class="pred-out">
+            <span class="eyebrow">預測 <span class="tname"></span></span>
+            <output id="m-pred" class="big">—</output>
+            <div class="pred-break" id="m-pred-break"></div>
+          </div>
+        </div>
+        <details class="code">
+          <summary>模型參數 JSON（等同 pickle 存檔）</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="m-json">複製</button><button type="button" class="btn tiny" id="m-dl">下載 .json</button></div>
+          <pre id="m-json"></pre>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== Problem 1：AR ===================== -->
+  <div id="panel-ar" hidden>
+    <section class="step">
+      <div class="step-label"><span class="step-no">1</span><span>Business <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>商業理解</h3>
+        <p class="lead" id="a-biz"></p>
+        <ul class="criteria">
+          <li><b>模型</b>：AR(p) 自我迴歸，<code>y<sub>t</sub> = c + φ<sub>1</sub>y<sub>t−1</sub> + … + φ<sub>p</sub>y<sub>t−p</sub> + ε<sub>t</sub></code>，用過去 p 天收盤價預測下一個交易日。</li>
+          <li><b>成功標準</b>：測試期 RMSE 要比「明天 = 今天」的 naive 基準低，否則模型沒有帶來額外資訊。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">2</span><span>Data <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>資料理解</h3>
+        <div class="kpis" id="a-kpis"></div>
+        <figure class="chart-box wide"><figcaption id="a-line-cap">收盤價走勢</figcaption><div class="cv tall"><canvas id="c-price"></canvas></div></figure>
+        <figure class="chart-box"><figcaption>PACF 偏自相關（虛線 = ±1.96/√n 顯著界線）</figcaption><div class="cv"><canvas id="c-pacf"></canvas></div></figure>
+        <p class="note">PACF 在第 k 期仍顯著，代表 y<sub>t−k</sub> 對 y<sub>t</sub> 還有額外的解釋力，可作為 p 的參考。</p>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">3</span><span>Data <br>Preparation</span></div>
+      <div class="step-body">
+        <h3>資料準備</h3>
+        <div class="controls">
+          <div class="ctl" id="a-col-wrap">
+            <label for="a-col">數值欄位</label>
+            <select id="a-col"></select>
+          </div>
+          <div class="ctl">
+            <label for="a-test">測試期比例 <output id="a-test-out">20%</output></label>
+            <input id="a-test" type="range" min="0.1" max="0.4" step="0.05" value="0.2">
+          </div>
+        </div>
+        <ol class="prep" id="a-prep"></ol>
+        <details class="code">
+          <summary>對應的 Python（sklearn）程式碼</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="a-code">複製</button></div>
+          <pre id="a-code"></pre>
+        </details>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">4</span><span>Modeling</span></div>
+      <div class="step-body">
+        <h3>建模：選擇落後期數 p</h3>
+        <div class="controls">
+          <div class="ctl grow">
+            <label for="a-p">落後期數 p = <output id="a-p-out">1</output></label>
+            <input id="a-p" type="range" min="1" max="20" step="1" value="1">
+          </div>
+        </div>
+        <p class="note" id="a-p-note"></p>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>RMSE by Lag Order p（訓練 / 測試 / naive）</figcaption><div class="cv"><canvas id="c-a-rmse"></canvas></div></figure>
+          <figure class="chart-box"><figcaption>AIC by Lag Order p（訓練集，越低越好）</figcaption><div class="cv"><canvas id="c-a-aic"></canvas></div></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">5</span><span>Evaluation</span></div>
+      <div class="step-body">
+        <h3>評估 <span class="sub" id="a-eval-title"></span></h3>
+        <div class="kpis" id="a-metrics"></div>
+        <p class="callout" id="a-verdict"></p>
+        <div class="equation" id="a-eq"></div>
+        <figure class="chart-box wide"><figcaption>測試期：實際 vs 預測（一步預測）</figcaption><div class="cv tall"><canvas id="c-a-test"></canvas></div></figure>
+        <h4>迴歸係數</h4>
+        <div class="tscroll"><table class="data" id="a-coef"></table></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">6</span><span>Deployment</span></div>
+      <div class="step-body">
+        <h3>部署：未來走勢預測</h3>
+        <div class="controls">
+          <div class="ctl grow">
+            <label for="a-h">預測天數 <output id="a-h-out">10</output> 個交易日</label>
+            <input id="a-h" type="range" min="1" max="30" step="1" value="10">
+          </div>
+        </div>
+        <figure class="chart-box wide"><figcaption>近 60 日 + 遞迴預測（陰影 = 95% 預測區間）</figcaption><div class="cv tall"><canvas id="c-a-fc"></canvas></div></figure>
+        <div class="tscroll"><table class="data" id="a-fc-table"></table></div>
+        <p class="note">AR 模型只用價格本身的慣性，沒有考慮財報、法說會、國際情勢等外部資訊；預測區間會隨天數快速擴大。僅供課堂練習，不構成投資建議。</p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <p><b>作業說明</b>：DO In-Class 2「do two problems but choose one of the topic to upload」。Problem 1 為台積電股價自我迴歸、Problem 2 套用老師 <a href="https://huanchen1107.github.io/AIoT-DIC2-MultipleLR/" target="_blank" rel="noopener">50 Startups MLR Explorer</a> 的 CRISP-DM + 特徵選擇 workflow。加分：上方下拉選單切換兩個 problem、資料集列可輸入任意 CSV。</p>
+    <p><b>資料來源</b>：50 Startups（<a href="https://raw.githubusercontent.com/Avik-Jain/100-Days-Of-ML-Code/master/datasets/50_Startups.csv" target="_blank" rel="noopener">Avik-Jain / 100-Days-Of-ML-Code</a>）；2330.TW 日收盤價（臺灣證券交易所 STOCK_DAY，2025/12/01–2026/10/14 快照；即時資料來自 <a href="https://finmindtrade.com/" target="_blank" rel="noopener">FinMind</a>）。</p>
+    <p><b>計算</b>：全部在瀏覽器以 JavaScript 完成。訓練/測試切分重現 <code>sklearn.train_test_split(random_state)</code>，OLS 推論統計與 statsmodels 相同公式。</p>
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>/*DATA*/</script>
+<script>/*ML*/</script>
+<script>/*APP*/</script>

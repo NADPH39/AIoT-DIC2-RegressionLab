@@ -1,0 +1,1716 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AIoT Regression Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="CRISP-DM 回歸實驗室：台積電 2330.TW 自我迴歸股價預測 與 50 Startups 多元線性回歸特徵選擇，可輸入任意 CSV 資料集。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>/* Layout: sticky top bar → dataset strip → CRISP-DM steps as a two-column ledger (step label | work area) */
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --ink: #131a24;
+  --muted: #5a6577;
+  --line: #d9dfe8;
+  --accent: #2547c8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e4e9fb;
+  --train: #2547c8;
+  --test: #cf5a2a;
+  --cv: #0d8566;
+  --naive: #8b94a5;
+  --good: #11804f;
+  --good-soft: #ddf3e8;
+  --warn: #a5650a;
+  --warn-soft: #fbefd9;
+  --bad: #b8322a;
+  --bad-soft: #f9e1df;
+  --grid: rgba(19, 26, 36, 0.08);
+  --font-display: "Bricolage Grotesque", "Noto Sans TC", system-ui, sans-serif;
+  --font-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --r: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1117; --surface: #151b24; --surface-2: #1a212c; --ink: #e5eaf1; --muted: #98a3b4; --line: #283242;
+    --accent: #7f9dff; --accent-ink: #0d1117; --accent-soft: #1d2846;
+    --train: #7f9dff; --test: #ff8d5e; --cv: #3fd0a0; --naive: #8b94a5;
+    --good: #4fd394; --good-soft: #143326; --warn: #f0b252; --warn-soft: #3a2c12; --bad: #ff7f74; --bad-soft: #3d1c1a;
+    --grid: rgba(229, 234, 241, 0.09);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1117; --surface: #151b24; --surface-2: #1a212c; --ink: #e5eaf1; --muted: #98a3b4; --line: #283242;
+  --accent: #7f9dff; --accent-ink: #0d1117; --accent-soft: #1d2846;
+  --train: #7f9dff; --test: #ff8d5e; --cv: #3fd0a0; --naive: #8b94a5;
+  --good: #4fd394; --good-soft: #143326; --warn: #f0b252; --warn-soft: #3a2c12; --bad: #ff7f74; --bad-soft: #3d1c1a;
+  --grid: rgba(229, 234, 241, 0.09);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 1200px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: var(--accent); }
+code { font-family: var(--font-mono); font-size: 0.88em; background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+h2, h3, h4 { text-wrap: balance; margin: 0; }
+h3 { font-family: var(--font-display); font-size: 1.45rem; font-weight: 700; letter-spacing: -0.01em; }
+h3 .sub { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 6px; }
+h4 { font-size: 0.95rem; font-weight: 700; margin-top: 8px; }
+.mt0 { margin-top: 0; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.eyebrow { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); font-weight: 500; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* top bar */
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); border-bottom: 1px solid var(--line); }
+.top-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 9px; background: var(--accent); color: var(--accent-ink); font-family: var(--font-display); font-weight: 700; font-size: 1.3rem; flex: none; }
+.brand-name { font-family: var(--font-display); font-weight: 700; font-size: 1.15rem; line-height: 1.2; }
+.brand-sub { font-size: 0.78rem; color: var(--muted); }
+.problem-pick { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 0 1 470px; }
+.problem-pick select { font-size: 0.95rem; font-weight: 500; padding: 8px 10px; border: 1.5px solid var(--accent); border-radius: 8px; background: var(--accent-soft); color: var(--ink); width: 100%; }
+
+/* form controls */
+input, select, button { font: inherit; color: inherit; }
+input[type="url"], input[type="text"], input[type="number"], select {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 7px 10px; min-width: 0;
+}
+input.short, select.short { width: 120px; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 7px; padding: 7px 14px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 500; white-space: nowrap; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.tiny { padding: 2px 10px; font-size: 0.8rem; }
+.btn[disabled] { opacity: 0.55; cursor: progress; }
+.file-btn input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.file-btn { position: relative; }
+
+/* dataset strip */
+.dataset { margin-top: 20px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px 18px; display: grid; gap: 10px; }
+.ds-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.ds-head h2 { font-family: var(--font-display); font-size: 1.1rem; }
+.ds-note { margin: 0; color: var(--muted); font-size: 0.88rem; }
+.ds-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.ds-row #ds-url { flex: 1 1 320px; font-family: var(--font-mono); font-size: 0.85rem; }
+.inline-label { font-size: 0.85rem; color: var(--muted); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px dashed var(--line); background: var(--surface-2); border-radius: 999px; padding: 3px 12px; font-size: 0.8rem; cursor: pointer; }
+.chip:hover { border-color: var(--accent); border-style: solid; }
+.status { margin: 0; font-size: 0.85rem; padding: 6px 10px; border-radius: 6px; background: var(--surface-2); border-left: 3px solid var(--line); }
+.status.ok { border-left-color: var(--good); }
+.status.err { border-left-color: var(--bad); background: var(--bad-soft); }
+.status.busy { border-left-color: var(--warn); }
+
+/* CRISP-DM ledger */
+.step { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 24px; padding-block: 28px; border-bottom: 1px solid var(--line); }
+.step-label { display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 500; line-height: 1.35; position: sticky; top: 90px; align-self: start; }
+.step-no { font-family: var(--font-display); font-size: 2.4rem; line-height: 1; color: var(--accent); letter-spacing: 0; }
+.step-body { display: grid; gap: 14px; min-width: 0; }
+.lead { margin: 0; max-width: 70ch; }
+.criteria { margin: 0; padding-left: 18px; color: var(--muted); max-width: 75ch; display: grid; gap: 4px; }
+.criteria b { color: var(--ink); }
+.note { margin: 0; color: var(--muted); font-size: 0.88rem; max-width: 80ch; }
+.hint { color: var(--muted); font-size: 0.82rem; }
+.field-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.field-row label { font-weight: 700; }
+.controls { display: flex; gap: 18px 28px; flex-wrap: wrap; align-items: flex-end; }
+.ctl { display: grid; gap: 4px; min-width: 180px; }
+.ctl.grow { flex: 1 1 260px; }
+.ctl label { font-size: 0.85rem; font-weight: 500; }
+.ctl output { font-family: var(--font-mono); font-weight: 500; color: var(--accent); }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.kpi .v { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi .s { font-size: 0.75rem; color: var(--muted); }
+.kpi.good { border-color: var(--good); background: var(--good-soft); }
+.kpi.bad { border-color: var(--bad); background: var(--bad-soft); }
+
+/* tables */
+.tscroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table.data { border-collapse: collapse; width: 100%; font-size: 0.84rem; }
+table.data th, table.data td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--line); }
+table.data th { background: var(--surface-2); font-weight: 700; font-size: 0.78rem; position: sticky; top: 0; }
+table.data td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+table.data th:first-child, table.data td:first-child, table.data td.txt, table.data th.txt { text-align: left; }
+table.data td.txt { font-family: var(--font-body); white-space: normal; min-width: 140px; }
+table.data tr:last-child td { border-bottom: 0; }
+table.results tbody tr { cursor: pointer; }
+table.results tbody tr:hover td { background: var(--surface-2); }
+tr.sel td { background: var(--accent-soft) !important; }
+tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.pill { display: inline-block; font-family: var(--font-body); font-size: 0.72rem; font-weight: 700; border-radius: 999px; padding: 0 8px; line-height: 1.6; }
+.pill.good { background: var(--good-soft); color: var(--good); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.pill.acc { background: var(--accent-soft); color: var(--accent); }
+
+/* segmented algo picker */
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 6px 12px; font-size: 0.85rem; cursor: pointer; }
+.seg button[aria-selected="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.seg button.all { border-style: dashed; }
+
+/* charts */
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.chart-box { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px 8px; min-width: 0; }
+.chart-box figcaption { font-size: 0.82rem; font-weight: 700; margin-bottom: 4px; }
+.cv { position: relative; height: 260px; }
+.cv.tall { height: 320px; }
+
+.callout { margin: 0; padding: 10px 14px; border-radius: 8px; background: var(--accent-soft); font-size: 0.9rem; max-width: 90ch; }
+.callout.warn { background: var(--warn-soft); }
+.callout.good { background: var(--good-soft); }
+.equation { font-family: var(--font-mono); font-size: 0.88rem; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; overflow-x: auto; white-space: nowrap; }
+.equation .y { color: var(--accent); font-weight: 500; }
+
+.prep { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 85ch; }
+.prep li::marker { color: var(--accent); font-weight: 700; }
+
+details.code { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+details.code summary { cursor: pointer; padding: 8px 12px; font-weight: 500; font-size: 0.88rem; }
+details.code pre { margin: 0; padding: 12px 14px; overflow-x: auto; font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.55; border-top: 1px solid var(--line); background: var(--surface-2); max-height: 420px; }
+.code-actions { display: flex; gap: 6px; justify-content: flex-end; padding: 0 12px 8px; }
+
+/* predictor */
+.predict { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.pred-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
+.pred-form label { display: grid; gap: 3px; font-size: 0.82rem; font-weight: 500; }
+.pred-form input, .pred-form select { width: 100%; font-family: var(--font-mono); font-size: 0.9rem; }
+.pred-out { background: var(--surface); border: 1.5px solid var(--accent); border-radius: var(--r); padding: 14px 16px; display: grid; gap: 6px; }
+.big { font-family: var(--font-display); font-size: 2.1rem; font-weight: 700; color: var(--accent); font-variant-numeric: tabular-nums; line-height: 1.1; overflow-wrap: anywhere; }
+.pred-break { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); display: grid; gap: 1px; }
+
+.foot { padding-block: 28px 40px; color: var(--muted); font-size: 0.84rem; display: grid; gap: 6px; max-width: 95ch; }
+.foot p { margin: 0; }
+
+@media (max-width: 860px) {
+  .step { grid-template-columns: minmax(0, 1fr); gap: 10px; padding-block: 22px; }
+  .step-label { position: static; flex-direction: row; align-items: center; gap: 10px; }
+  .step-label br { display: none; }
+  .step-no { font-size: 1.6rem; }
+  .grid2, .predict { grid-template-columns: minmax(0, 1fr); }
+  .problem-pick { flex: 1 1 100%; }
+  .top { position: static; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">β</span>
+      <div>
+        <div class="brand-name">AIoT Regression Lab</div>
+        <div class="brand-sub">DO In-Class 2 · CRISP-DM · 多元回歸</div>
+      </div>
+    </div>
+    <label class="problem-pick" for="problem">
+      <span class="eyebrow">Problem</span>
+      <select id="problem">
+        <option value="ar">Problem 1｜台積電 2330.TW 股價預測（AR）</option>
+        <option value="mlr" selected>Problem 2｜50 Startups 多元線性回歸（MLR）</option>
+      </select>
+    </label>
+  </div>
+</header>
+
+<main class="wrap">
+  <!-- 資料集列 -->
+  <section class="dataset" aria-labelledby="ds-title">
+    <div class="ds-head">
+      <h2 id="ds-title">資料集</h2>
+      <p class="ds-note" id="ds-hint">貼上任意 CSV 網址（GitHub raw、gist…）或上傳檔案，整頁會用新資料重新跑完六個 CRISP-DM 步驟。</p>
+    </div>
+    <form class="ds-row" id="ds-form">
+      <label class="sr" for="ds-url">CSV 網址</label>
+      <input id="ds-url" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://raw.githubusercontent.com/…/data.csv">
+      <button type="submit" class="btn primary" id="ds-load">載入網址</button>
+      <label class="btn ghost file-btn" for="ds-file">上傳 CSV<input id="ds-file" type="file" accept=".csv,text/csv,text/plain"></label>
+    </form>
+    <div class="chips" id="ds-chips"></div>
+    <div class="ds-row stock-row" id="stock-row" hidden>
+      <label for="stock-id" class="inline-label">台股代號</label>
+      <input id="stock-id" type="text" value="2330" maxlength="6" inputmode="numeric" class="short">
+      <label for="stock-days" class="inline-label">期間</label>
+      <select id="stock-days" class="short">
+        <option value="365">近 1 年</option>
+        <option value="730">近 2 年</option>
+        <option value="1095">近 3 年</option>
+      </select>
+      <button type="button" class="btn ghost" id="stock-live">即時抓取（FinMind API）</button>
+    </div>
+    <p class="status" id="ds-status" role="status"></p>
+  </section>
+
+  <!-- ===================== Problem 2：MLR ===================== -->
+  <div id="panel-mlr">
+    <section class="step">
+      <div class="step-label"><span class="step-no">1</span><span>Business <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>商業理解</h3>
+        <p class="lead" id="m-biz"></p>
+        <div class="field-row">
+          <label for="m-target">目標變數 y</label>
+          <select id="m-target"></select>
+          <span class="hint">預設選 <code>Profit</code>；換成任意資料集時自動選最後一個數值欄。</span>
+        </div>
+        <ul class="criteria">
+          <li><b>成功標準</b>：測試集 R² 高、RMSE / MAE 低，且模型不過度擬合（訓練與測試誤差差距小）。</li>
+          <li><b>利害關係人</b>：決定研發、行銷、行政預算配置的經營團隊與分析師。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">2</span><span>Data <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>資料理解</h3>
+        <div class="kpis" id="m-kpis"></div>
+        <h4>前 8 筆資料</h4>
+        <div class="tscroll"><table class="data" id="m-head"></table></div>
+        <h4>欄位統計</h4>
+        <div class="tscroll"><table class="data" id="m-describe"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>各特徵與 <span class="tname"></span> 的相關係數 r</figcaption><div class="cv"><canvas id="c-corr"></canvas></div></figure>
+          <figure class="chart-box"><figcaption id="m-scatter-cap">最強特徵 vs 目標</figcaption><div class="cv"><canvas id="c-scatter"></canvas></div></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">3</span><span>Data <br>Preparation</span></div>
+      <div class="step-body">
+        <h3>資料準備</h3>
+        <div class="controls">
+          <div class="ctl">
+            <label for="m-test">測試集比例 <output id="m-test-out">20%</output></label>
+            <input id="m-test" type="range" min="0.1" max="0.4" step="0.05" value="0.2">
+          </div>
+          <div class="ctl">
+            <label for="m-seed">random_state</label>
+            <input id="m-seed" type="number" min="0" max="4294967295" step="1" value="0" class="short">
+          </div>
+        </div>
+        <ol class="prep" id="m-prep"></ol>
+        <details class="code">
+          <summary>對應的 Python（sklearn）程式碼</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="m-code">複製</button></div>
+          <pre id="m-code"></pre>
+        </details>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">4</span><span>Modeling</span></div>
+      <div class="step-body">
+        <h3>建模：特徵選擇 + OLS</h3>
+        <div class="seg" id="m-algos" role="tablist" aria-label="特徵選擇演算法"></div>
+        <div class="controls">
+          <div class="ctl">
+            <label for="m-crit">挑選準則</label>
+            <select id="m-crit">
+              <option value="cv">5-fold CV RMSE（只用訓練集）</option>
+              <option value="test">Test RMSE（課堂筆記做法）</option>
+            </select>
+          </div>
+          <div class="ctl grow" id="m-k-wrap">
+            <label for="m-k">特徵數 k = <output id="m-k-out">2</output></label>
+            <input id="m-k" type="range" min="1" max="5" step="1" value="2">
+          </div>
+        </div>
+        <p class="note" id="m-algo-note"></p>
+        <div class="tscroll"><table class="data results" id="m-results"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>RMSE by Number of Features</figcaption><div class="cv"><canvas id="c-rmse"></canvas></div></figure>
+          <figure class="chart-box"><figcaption>R-squared by Number of Features</figcaption><div class="cv"><canvas id="c-r2"></canvas></div></figure>
+        </div>
+        <p class="callout" id="m-fit-verdict"></p>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">5</span><span>Evaluation</span></div>
+      <div class="step-body">
+        <h3>評估 <span class="sub" id="m-eval-title"></span></h3>
+        <div class="kpis" id="m-metrics"></div>
+        <div class="equation" id="m-eq"></div>
+        <h4>迴歸係數（訓練集 OLS 推論）</h4>
+        <div class="tscroll"><table class="data" id="m-coef"></table></div>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>Actual vs Predicted（測試集）</figcaption><div class="cv"><canvas id="c-avp"></canvas></div></figure>
+          <div>
+            <h4 class="mt0">測試集殘差 Top 10</h4>
+            <div class="tscroll"><table class="data" id="m-resid"></table></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">6</span><span>Deployment</span></div>
+      <div class="step-body">
+        <h3>部署：即時預測</h3>
+        <div class="predict">
+          <form id="m-pred-form" class="pred-form"></form>
+          <div class="pred-out">
+            <span class="eyebrow">預測 <span class="tname"></span></span>
+            <output id="m-pred" class="big">—</output>
+            <div class="pred-break" id="m-pred-break"></div>
+          </div>
+        </div>
+        <details class="code">
+          <summary>模型參數 JSON（等同 pickle 存檔）</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="m-json">複製</button><button type="button" class="btn tiny" id="m-dl">下載 .json</button></div>
+          <pre id="m-json"></pre>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <!-- ===================== Problem 1：AR ===================== -->
+  <div id="panel-ar" hidden>
+    <section class="step">
+      <div class="step-label"><span class="step-no">1</span><span>Business <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>商業理解</h3>
+        <p class="lead" id="a-biz"></p>
+        <ul class="criteria">
+          <li><b>模型</b>：AR(p) 自我迴歸，<code>y<sub>t</sub> = c + φ<sub>1</sub>y<sub>t−1</sub> + … + φ<sub>p</sub>y<sub>t−p</sub> + ε<sub>t</sub></code>，用過去 p 天收盤價預測下一個交易日。</li>
+          <li><b>成功標準</b>：測試期 RMSE 要比「明天 = 今天」的 naive 基準低，否則模型沒有帶來額外資訊。</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">2</span><span>Data <br>Understanding</span></div>
+      <div class="step-body">
+        <h3>資料理解</h3>
+        <div class="kpis" id="a-kpis"></div>
+        <figure class="chart-box wide"><figcaption id="a-line-cap">收盤價走勢</figcaption><div class="cv tall"><canvas id="c-price"></canvas></div></figure>
+        <figure class="chart-box"><figcaption>PACF 偏自相關（虛線 = ±1.96/√n 顯著界線）</figcaption><div class="cv"><canvas id="c-pacf"></canvas></div></figure>
+        <p class="note">PACF 在第 k 期仍顯著，代表 y<sub>t−k</sub> 對 y<sub>t</sub> 還有額外的解釋力，可作為 p 的參考。</p>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">3</span><span>Data <br>Preparation</span></div>
+      <div class="step-body">
+        <h3>資料準備</h3>
+        <div class="controls">
+          <div class="ctl" id="a-col-wrap">
+            <label for="a-col">數值欄位</label>
+            <select id="a-col"></select>
+          </div>
+          <div class="ctl">
+            <label for="a-test">測試期比例 <output id="a-test-out">20%</output></label>
+            <input id="a-test" type="range" min="0.1" max="0.4" step="0.05" value="0.2">
+          </div>
+        </div>
+        <ol class="prep" id="a-prep"></ol>
+        <details class="code">
+          <summary>對應的 Python（sklearn）程式碼</summary>
+          <div class="code-actions"><button type="button" class="btn tiny" data-copy="a-code">複製</button></div>
+          <pre id="a-code"></pre>
+        </details>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">4</span><span>Modeling</span></div>
+      <div class="step-body">
+        <h3>建模：選擇落後期數 p</h3>
+        <div class="controls">
+          <div class="ctl grow">
+            <label for="a-p">落後期數 p = <output id="a-p-out">1</output></label>
+            <input id="a-p" type="range" min="1" max="20" step="1" value="1">
+          </div>
+        </div>
+        <p class="note" id="a-p-note"></p>
+        <div class="grid2">
+          <figure class="chart-box"><figcaption>RMSE by Lag Order p（訓練 / 測試 / naive）</figcaption><div class="cv"><canvas id="c-a-rmse"></canvas></div></figure>
+          <figure class="chart-box"><figcaption>AIC by Lag Order p（訓練集，越低越好）</figcaption><div class="cv"><canvas id="c-a-aic"></canvas></div></figure>
+        </div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">5</span><span>Evaluation</span></div>
+      <div class="step-body">
+        <h3>評估 <span class="sub" id="a-eval-title"></span></h3>
+        <div class="kpis" id="a-metrics"></div>
+        <p class="callout" id="a-verdict"></p>
+        <div class="equation" id="a-eq"></div>
+        <figure class="chart-box wide"><figcaption>測試期：實際 vs 預測（一步預測）</figcaption><div class="cv tall"><canvas id="c-a-test"></canvas></div></figure>
+        <h4>迴歸係數</h4>
+        <div class="tscroll"><table class="data" id="a-coef"></table></div>
+      </div>
+    </section>
+
+    <section class="step">
+      <div class="step-label"><span class="step-no">6</span><span>Deployment</span></div>
+      <div class="step-body">
+        <h3>部署：未來走勢預測</h3>
+        <div class="controls">
+          <div class="ctl grow">
+            <label for="a-h">預測天數 <output id="a-h-out">10</output> 個交易日</label>
+            <input id="a-h" type="range" min="1" max="30" step="1" value="10">
+          </div>
+        </div>
+        <figure class="chart-box wide"><figcaption>近 60 日 + 遞迴預測（陰影 = 95% 預測區間）</figcaption><div class="cv tall"><canvas id="c-a-fc"></canvas></div></figure>
+        <div class="tscroll"><table class="data" id="a-fc-table"></table></div>
+        <p class="note">AR 模型只用價格本身的慣性，沒有考慮財報、法說會、國際情勢等外部資訊；預測區間會隨天數快速擴大。僅供課堂練習，不構成投資建議。</p>
+      </div>
+    </section>
+  </div>
+
+  <footer class="foot">
+    <p><b>作業說明</b>：DO In-Class 2「do two problems but choose one of the topic to upload」。Problem 1 為台積電股價自我迴歸、Problem 2 套用老師 <a href="https://huanchen1107.github.io/AIoT-DIC2-MultipleLR/" target="_blank" rel="noopener">50 Startups MLR Explorer</a> 的 CRISP-DM + 特徵選擇 workflow。加分：上方下拉選單切換兩個 problem、資料集列可輸入任意 CSV。</p>
+    <p><b>資料來源</b>：50 Startups（<a href="https://raw.githubusercontent.com/Avik-Jain/100-Days-Of-ML-Code/master/datasets/50_Startups.csv" target="_blank" rel="noopener">Avik-Jain / 100-Days-Of-ML-Code</a>）；2330.TW 日收盤價（臺灣證券交易所 STOCK_DAY，2025/12/01–2026/10/14 快照；即時資料來自 <a href="https://finmindtrade.com/" target="_blank" rel="noopener">FinMind</a>）。</p>
+    <p><b>計算</b>：全部在瀏覽器以 JavaScript 完成。訓練/測試切分重現 <code>sklearn.train_test_split(random_state)</code>，OLS 推論統計與 statsmodels 相同公式。</p>
+  </footer>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>window.DEFAULT_DATA = {"startups": "R&D Spend,Administration,Marketing Spend,State,Profit\n165349.2,136897.8,471784.1,New York,192261.83\n162597.7,151377.59,443898.53,California,191792.06\n153441.51,101145.55,407934.54,Florida,191050.39\n144372.41,118671.85,383199.62,New York,182901.99\n142107.34,91391.77,366168.42,Florida,166187.94\n131876.9,99814.71,362861.36,New York,156991.12\n134615.46,147198.87,127716.82,California,156122.51\n130298.13,145530.06,323876.68,Florida,155752.6\n120542.52,148718.95,311613.29,New York,152211.77\n123334.88,108679.17,304981.62,California,149759.96\n101913.08,110594.11,229160.95,Florida,146121.95\n100671.96,91790.61,249744.55,California,144259.4\n93863.75,127320.38,249839.44,Florida,141585.52\n91992.39,135495.07,252664.93,California,134307.35\n119943.24,156547.42,256512.92,Florida,132602.65\n114523.61,122616.84,261776.23,New York,129917.04\n78013.11,121597.55,264346.06,California,126992.93\n94657.16,145077.58,282574.31,New York,125370.37\n91749.16,114175.79,294919.57,Florida,124266.9\n86419.7,153514.11,0,New York,122776.86\n76253.86,113867.3,298664.47,California,118474.03\n78389.47,153773.43,299737.29,New York,111313.02\n73994.56,122782.75,303319.26,Florida,110352.25\n67532.53,105751.03,304768.73,Florida,108733.99\n77044.01,99281.34,140574.81,New York,108552.04\n64664.71,139553.16,137962.62,California,107404.34\n75328.87,144135.98,134050.07,Florida,105733.54\n72107.6,127864.55,353183.81,New York,105008.31\n66051.52,182645.56,118148.2,Florida,103282.38\n65605.48,153032.06,107138.38,New York,101004.64\n61994.48,115641.28,91131.24,Florida,99937.59\n61136.38,152701.92,88218.23,New York,97483.56\n63408.86,129219.61,46085.25,California,97427.84\n55493.95,103057.49,214634.81,Florida,96778.92\n46426.07,157693.92,210797.67,California,96712.8\n46014.02,85047.44,205517.64,New York,96479.51\n28663.76,127056.21,201126.82,Florida,90708.19\n44069.95,51283.14,197029.42,California,89949.14\n20229.59,65947.93,185265.1,New York,81229.06\n38558.51,82982.09,174999.3,California,81005.76\n28754.33,118546.05,172795.67,California,78239.91\n27892.92,84710.77,164470.71,Florida,77798.83\n23640.93,96189.63,148001.11,California,71498.49\n15505.73,127382.3,35534.17,New York,69758.98\n22177.74,154806.14,28334.72,California,65200.33\n1000.23,124153.04,1903.93,New York,64926.08\n1315.46,115816.21,297114.46,Florida,49490.75\n0,135426.92,0,California,42559.73\n542.05,51743.15,0,New York,35673.41\n0,116983.8,45173.06,California,14681.4", "tsmc": "Date,Close\n2025-12-01,1410\n2025-12-02,1430\n2025-12-03,1450\n2025-12-04,1445\n2025-12-05,1460\n2025-12-08,1495\n2025-12-09,1480\n2025-12-10,1505\n2025-12-11,1470\n2025-12-12,1480\n2025-12-15,1450\n2025-12-16,1435\n2025-12-17,1430\n2025-12-18,1430\n2025-12-19,1430\n2025-12-22,1465\n2025-12-23,1490\n2025-12-24,1495\n2025-12-26,1510\n2025-12-29,1530\n2025-12-30,1520\n2025-12-31,1550\n2026-01-02,1585\n2026-01-05,1670\n2026-01-06,1705\n2026-01-07,1675\n2026-01-08,1685\n2026-01-09,1680\n2026-01-12,1690\n2026-01-13,1710\n2026-01-14,1710\n2026-01-15,1690\n2026-01-16,1740\n2026-01-19,1760\n2026-01-20,1775\n2026-01-21,1740\n2026-01-22,1760\n2026-01-23,1770\n2026-01-26,1755\n2026-01-27,1780\n2026-01-28,1820\n2026-01-29,1805\n2026-01-30,1775\n2026-02-02,1765\n2026-02-03,1800\n2026-02-04,1785\n2026-02-05,1765\n2026-02-06,1780\n2026-02-09,1815\n2026-02-10,1880\n2026-02-11,1915\n2026-02-23,1900\n2026-02-24,1965\n2026-02-25,2015\n2026-02-26,1995\n2026-03-02,1975\n2026-03-03,1935\n2026-03-04,1865\n2026-03-05,1900\n2026-03-06,1890\n2026-03-09,1810\n2026-03-10,1850\n2026-03-11,1940\n2026-03-12,1885\n2026-03-13,1865\n2026-03-16,1845\n2026-03-17,1870\n2026-03-18,1905\n2026-03-19,1850\n2026-03-20,1840\n2026-03-23,1810\n2026-03-24,1810\n2026-03-25,1845\n2026-03-26,1840\n2026-03-27,1820\n2026-03-30,1780\n2026-03-31,1760\n2026-04-01,1855\n2026-04-02,1810\n2026-04-07,1860\n2026-04-08,1950\n2026-04-09,1955\n2026-04-10,2000\n2026-04-13,1990\n2026-04-14,2055\n2026-04-15,2080\n2026-04-16,2085\n2026-04-17,2030\n2026-04-20,2025\n2026-04-21,2050\n2026-04-22,2050\n2026-04-23,2080\n2026-04-24,2185\n2026-04-27,2265\n2026-04-28,2215\n2026-04-29,2180\n2026-04-30,2135\n2026-05-04,2275\n2026-05-05,2250\n2026-05-06,2250\n2026-05-07,2310\n2026-05-08,2290\n2026-05-11,2235\n2026-05-12,2255\n2026-05-13,2220\n2026-05-14,2270\n2026-05-15,2265\n2026-05-18,2240\n2026-05-19,2205\n2026-05-20,2185\n2026-05-21,2230\n2026-05-22,2255\n2026-05-25,2310\n2026-05-26,2270\n2026-05-27,2300\n2026-05-28,2295\n2026-05-29,2355\n2026-06-01,2355\n2026-06-02,2380\n2026-06-03,2425\n2026-06-04,2385\n2026-06-05,2365\n2026-06-08,2295\n2026-06-09,2305\n2026-06-10,2255\n2026-06-11,2250\n2026-06-12,2310\n2026-06-15,2375\n2026-06-16,2400\n2026-06-17,2385\n2026-06-18,2410\n2026-06-22,2510\n2026-06-23,2490\n2026-06-24,2390\n2026-06-25,2390\n2026-06-26,2340\n2026-06-29,2370\n2026-06-30,2410\n2026-07-01,2505\n2026-07-02,2465\n2026-07-03,2445\n2026-07-06,2460\n2026-07-07,2440\n2026-07-08,2465\n2026-07-09,2415\n2026-07-13,2440\n2026-07-14,2420\n2026-07-15,2440\n2026-07-16,2470\n2026-07-17,2290\n2026-07-20,2320\n2026-07-21,2410\n2026-07-22,2400\n2026-07-23,2405\n2026-07-24,2350\n2026-07-27,2350\n2026-07-28,2280\n2026-07-29,2200\n2026-07-30,2205\n2026-07-31,2425\n2026-08-03,2370\n2026-08-04,2320\n2026-08-05,2405\n2026-08-06,2365\n2026-08-07,2370\n2026-08-10,2380\n2026-08-11,2395\n2026-08-12,2415\n2026-08-13,2435\n2026-08-14,2395\n2026-08-17,2400\n2026-08-18,2380\n2026-08-19,2350\n2026-08-20,2375\n2026-08-21,2410\n2026-08-24,2375\n2026-08-25,2400\n2026-08-26,2415\n2026-08-27,2410\n2026-08-28,2420\n2026-08-31,2405\n2026-09-01,2440\n2026-09-02,2385\n2026-09-03,2390\n2026-09-04,2410\n2026-09-07,2460\n2026-09-08,2470\n2026-09-09,2465\n2026-09-10,2450\n2026-09-11,2410\n2026-09-14,2380\n2026-09-15,2385\n2026-09-16,2380\n2026-09-17,2425\n2026-09-18,2460\n2026-09-21,2480\n2026-09-22,2460\n2026-09-23,2500\n2026-09-24,2475\n2026-09-29,2475\n2026-09-30,2480\n2026-10-01,2510\n2026-10-02,2500\n2026-10-05,2575\n2026-10-06,2585\n2026-10-07,2585\n2026-10-08,2550\n2026-10-12,2540\n2026-10-13,2490\n2026-10-14,2490\n"};</script>
+<script>/* ml.js — 純前端回歸工具庫（無相依套件）
+ * - MT19937 + numpy legacy shuffle → 與 sklearn train_test_split(random_state=…) 相同切分
+ * - OLS（Householder QR）+ statsmodels 風格推論統計：SE、t、p、95% CI、F、VIF
+ * - Lasso / ElasticNet 座標下降路徑、Forward SFS、Backward（p-value）、RFE、Exhaustive
+ * - AR(p) 自我迴歸、PACF、遞迴預測與預測區間
+ */
+(function (root) {
+  'use strict';
+
+  /* ---------------- MT19937 (numpy RandomState legacy) ---------------- */
+  function MT19937(seed) {
+    this.mt = new Uint32Array(624);
+    this.idx = 624;
+    this.mt[0] = seed >>> 0;
+    for (let i = 1; i < 624; i++) {
+      const prev = this.mt[i - 1] ^ (this.mt[i - 1] >>> 30);
+      // 1812433253 * prev + i  (mod 2^32)，拆成高低 16 位避免精度流失
+      this.mt[i] = (((((prev & 0xffff0000) >>> 16) * 1812433253) << 16) + (prev & 0x0000ffff) * 1812433253 + i) >>> 0;
+    }
+  }
+  MT19937.prototype.next32 = function () {
+    const mt = this.mt;
+    if (this.idx >= 624) {
+      for (let k = 0; k < 624; k++) {
+        const y = (mt[k] & 0x80000000) | (mt[(k + 1) % 624] & 0x7fffffff);
+        mt[k] = (mt[(k + 397) % 624] ^ (y >>> 1) ^ (y & 1 ? 0x9908b0df : 0)) >>> 0;
+      }
+      this.idx = 0;
+    }
+    let y = mt[this.idx++];
+    y ^= y >>> 11;
+    y = (y ^ ((y << 7) & 0x9d2c5680)) >>> 0;
+    y = (y ^ ((y << 15) & 0xefc60000)) >>> 0;
+    y ^= y >>> 18;
+    return y >>> 0;
+  };
+  MT19937.prototype.interval = function (max) {
+    if (max === 0) return 0;
+    let mask = max;
+    mask |= mask >>> 1; mask |= mask >>> 2; mask |= mask >>> 4; mask |= mask >>> 8; mask |= mask >>> 16;
+    mask >>>= 0;
+    let v;
+    while ((v = (this.next32() & mask) >>> 0) > max) { /* reject */ }
+    return v;
+  };
+  function permutation(n, seed) {
+    const rng = new MT19937(seed);
+    const a = Array.from({ length: n }, (_, i) => i);
+    for (let i = n - 1; i >= 1; i--) {
+      const j = rng.interval(i);
+      const t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+  /** 與 sklearn.model_selection.train_test_split(test_size, random_state) 相同 */
+  function trainTestSplit(n, testSize, seed) {
+    const nTest = Math.ceil(testSize * n);
+    const perm = permutation(n, seed);
+    return { test: perm.slice(0, nTest), train: perm.slice(nTest) };
+  }
+
+  /* ---------------- CSV ---------------- */
+  function parseCSV(text) {
+    text = text.replace(/^﻿/, '');
+    const firstLine = text.split(/\r?\n/, 1)[0] || '';
+    const cand = [',', ';', '\t'];
+    let delim = ',', best = -1;
+    for (const c of cand) { const k = firstLine.split(c).length; if (k > best) { best = k; delim = c; } }
+    const rows = [];
+    let row = [], field = '', q = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (q) {
+        if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+        else field += ch;
+      } else if (ch === '"') q = true;
+      else if (ch === delim) { row.push(field); field = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(field); field = '';
+        if (row.length > 1 || row[0] !== '') rows.push(row);
+        row = [];
+      } else field += ch;
+    }
+    if (field !== '' || row.length) { row.push(field); if (row.length > 1 || row[0] !== '') rows.push(row); }
+    if (!rows.length) throw new Error('檔案是空的');
+    const header = rows[0].map((h, i) => (h.trim() || ('col_' + (i + 1))));
+    const data = rows.slice(1).filter(r => r.some(v => v.trim() !== ''));
+    const cols = {};
+    header.forEach((h, j) => { cols[h] = data.map(r => (r[j] === undefined ? '' : r[j].trim())); });
+    return { header, cols, n: data.length };
+  }
+  function toNumber(s) {
+    if (s === null || s === undefined) return NaN;
+    if (typeof s === 'number') return s;
+    const t = String(s).replace(/[,$\s%]/g, '');
+    if (t === '' || /^(na|nan|null|none|-|--)$/i.test(t)) return NaN;
+    const v = Number(t);
+    return Number.isFinite(v) ? v : NaN;
+  }
+  function isMissing(s) { return s === '' || /^(na|nan|null|none)$/i.test(String(s).trim()); }
+
+  /* ---------------- 統計分配 ---------------- */
+  function lgamma(x) {
+    const c = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+    let y = x, tmp = x + 5.5;
+    tmp -= (x + 0.5) * Math.log(tmp);
+    let ser = 1.000000000190015;
+    for (let j = 0; j < 6; j++) ser += c[j] / ++y;
+    return -tmp + Math.log(2.5066282746310005 * ser / x);
+  }
+  function betacf(a, b, x) {
+    const MAXIT = 300, EPS = 3e-16, FPMIN = 1e-300;
+    let qab = a + b, qap = a + 1, qam = a - 1, c = 1, d = 1 - qab * x / qap;
+    if (Math.abs(d) < FPMIN) d = FPMIN;
+    d = 1 / d; let h = d;
+    for (let m = 1; m <= MAXIT; m++) {
+      const m2 = 2 * m;
+      let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+      d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+      c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+      d = 1 / d; h *= d * c;
+      aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+      d = 1 + aa * d; if (Math.abs(d) < FPMIN) d = FPMIN;
+      c = 1 + aa / c; if (Math.abs(c) < FPMIN) c = FPMIN;
+      d = 1 / d;
+      const del = d * c; h *= del;
+      if (Math.abs(del - 1) < EPS) break;
+    }
+    return h;
+  }
+  function betai(a, b, x) {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    const bt = Math.exp(lgamma(a + b) - lgamma(a) - lgamma(b) + a * Math.log(x) + b * Math.log(1 - x));
+    return x < (a + 1) / (a + b + 2) ? bt * betacf(a, b, x) / a : 1 - bt * betacf(b, a, 1 - x) / b;
+  }
+  /** 雙尾 t 檢定 p 值 */
+  function tPValue(t, df) {
+    if (!Number.isFinite(t)) return t === t ? 0 : NaN;
+    return betai(df / 2, 0.5, df / (df + t * t));
+  }
+  function tCDF(t, df) { const p = tPValue(t, df) / 2; return t >= 0 ? 1 - p : p; }
+  function tInv(p, df) {
+    let lo = -1e3, hi = 1e3;
+    for (let i = 0; i < 200; i++) { const mid = (lo + hi) / 2; if (tCDF(mid, df) < p) lo = mid; else hi = mid; }
+    return (lo + hi) / 2;
+  }
+  /** F 分配右尾機率 */
+  function fPValue(F, d1, d2) {
+    if (!(F > 0)) return 1;
+    return betai(d2 / 2, d1 / 2, d2 / (d2 + d1 * F));
+  }
+
+  /* ---------------- 基本工具 ---------------- */
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  function std(a, ddof = 0) { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) * (v - m), 0) / (a.length - ddof)); }
+  function metrics(y, p) {
+    const n = y.length; let sse = 0, sae = 0, sape = 0, nape = 0;
+    const m = mean(y); let sst = 0;
+    for (let i = 0; i < n; i++) {
+      const e = y[i] - p[i]; sse += e * e; sae += Math.abs(e); sst += (y[i] - m) * (y[i] - m);
+      if (y[i] !== 0) { sape += Math.abs(e / y[i]); nape++; }
+    }
+    return { mse: sse / n, rmse: Math.sqrt(sse / n), mae: sae / n, r2: sst > 0 ? 1 - sse / sst : NaN, mape: nape ? 100 * sape / nape : NaN, sse, n };
+  }
+  const adjR2 = (r2, n, k) => (n - k - 1 > 0 ? 1 - (1 - r2) * (n - 1) / (n - k - 1) : NaN);
+
+  /* ---------------- OLS（Householder QR） ---------------- */
+  /** X: rows (n×k，不含截距)；回傳含截距的係數與推論統計 */
+  function ols(X, y, opts) {
+    opts = opts || {};
+    const n = y.length, k = X.length ? X[0].length : 0, p = k + 1;
+    if (n <= p) throw new Error('樣本數不足以估計 ' + p + ' 個參數');
+    // A: column-major copy with intercept
+    const A = [];
+    A.push(new Float64Array(n).fill(1));
+    for (let j = 0; j < k; j++) { const c = new Float64Array(n); for (let i = 0; i < n; i++) c[i] = X[i][j]; A.push(c); }
+    const b = Float64Array.from(y);
+    const R = Array.from({ length: p }, () => new Float64Array(p));
+    const scale = A.map(c => Math.sqrt(c.reduce((s, v) => s + v * v, 0)) || 1);
+    for (let j = 0; j < p; j++) {
+      const col = A[j];
+      let norm = 0; for (let i = j; i < n; i++) norm += col[i] * col[i];
+      norm = Math.sqrt(norm);
+      if (norm < 1e-10 * scale[j]) { const e = new Error('共線性：無法估計（設計矩陣奇異）'); e.singular = j; throw e; }
+      const alpha = col[j] > 0 ? -norm : norm;
+      const v = new Float64Array(n);
+      v[j] = col[j] - alpha; for (let i = j + 1; i < n; i++) v[i] = col[i];
+      let vv = 0; for (let i = j; i < n; i++) vv += v[i] * v[i];
+      const apply = c => { let d = 0; for (let i = j; i < n; i++) d += v[i] * c[i]; d = 2 * d / vv; for (let i = j; i < n; i++) c[i] -= d * v[i]; };
+      for (let jj = j; jj < p; jj++) apply(A[jj]);
+      apply(b);
+      for (let jj = j; jj < p; jj++) R[j][jj] = A[jj][j];
+    }
+    // back-substitution
+    const beta = new Float64Array(p);
+    for (let i = p - 1; i >= 0; i--) { let s = b[i]; for (let jj = i + 1; jj < p; jj++) s -= R[i][jj] * beta[jj]; beta[i] = s / R[i][i]; }
+    // Rinv
+    const Ri = Array.from({ length: p }, () => new Float64Array(p));
+    for (let i = p - 1; i >= 0; i--) {
+      Ri[i][i] = 1 / R[i][i];
+      for (let jj = i + 1; jj < p; jj++) { let s = 0; for (let m = i + 1; m <= jj; m++) s += R[i][m] * Ri[m][jj]; Ri[i][jj] = -s / R[i][i]; }
+    }
+    const fitted = new Float64Array(n);
+    for (let i = 0; i < n; i++) { let s = beta[0]; for (let j = 0; j < k; j++) s += beta[j + 1] * X[i][j]; fitted[i] = s; }
+    let sse = 0; const ym = mean(y); let sst = 0;
+    for (let i = 0; i < n; i++) { sse += (y[i] - fitted[i]) ** 2; sst += (y[i] - ym) ** 2; }
+    const df = n - p, s2 = sse / df;
+    const tcrit = tInv(0.975, df);
+    const rows = [];
+    for (let j = 0; j < p; j++) {
+      let d = 0; for (let m = j; m < p; m++) d += Ri[j][m] * Ri[j][m];
+      const se = Math.sqrt(d * s2), t = beta[j] / se;
+      rows.push({ coef: beta[j], se, t, p: tPValue(t, df), lo: beta[j] - tcrit * se, hi: beta[j] + tcrit * se });
+    }
+    const r2 = 1 - sse / sst;
+    const F = k > 0 ? ((sst - sse) / k) / s2 : NaN;
+    return {
+      beta: Array.from(beta), rows, sse, sst, r2, adjR2: adjR2(r2, n, k), df, s2, sigma: Math.sqrt(s2),
+      F, Fp: k > 0 ? fPValue(F, k, df) : NaN, n, k,
+      aic: n * Math.log(sse / n) + 2 * p,
+      predict: Xn => Xn.map(r => { let s = beta[0]; for (let j = 0; j < k; j++) s += beta[j + 1] * r[j]; return s; })
+    };
+  }
+  function vif(X) {
+    const k = X[0].length; if (k < 2) return Array(k).fill(1);
+    const out = [];
+    for (let j = 0; j < k; j++) {
+      const Xo = X.map(r => r.filter((_, m) => m !== j)), yj = X.map(r => r[j]);
+      try { const f = ols(Xo, yj); out.push(1 / Math.max(1e-12, 1 - f.r2)); } catch (e) { out.push(Infinity); }
+    }
+    return out;
+  }
+  const pick = (X, idx) => X.map(r => idx.map(j => r[j]));
+
+  /* ---------------- 標準化 + 座標下降（Lasso / ElasticNet） ---------------- */
+  function standardize(X) {
+    const n = X.length, k = X[0].length, mu = [], sd = [];
+    for (let j = 0; j < k; j++) { const c = X.map(r => r[j]); mu.push(mean(c)); sd.push(std(c) || 1); }
+    return { Z: X.map(r => r.map((v, j) => (v - mu[j]) / sd[j])), mu, sd };
+  }
+  /** sklearn 目標函數：1/(2n)||y-Zw||² + α·l1·||w||₁ + ½α(1-l1)||w||² */
+  function enetPath(X, y, l1Ratio, nAlphas) {
+    nAlphas = nAlphas || 100;
+    const { Z } = standardize(X);
+    const n = Z.length, k = Z[0].length, ym = mean(y), yc = y.map(v => v - ym);
+    const cols = Array.from({ length: k }, (_, j) => Z.map(r => r[j]));
+    const ss = cols.map(c => c.reduce((s, v) => s + v * v, 0));
+    let amax = 0; for (let j = 0; j < k; j++) amax = Math.max(amax, Math.abs(cols[j].reduce((s, v, i) => s + v * yc[i], 0)) / (n * l1Ratio));
+    const alphas = []; for (let i = 0; i < nAlphas; i++) alphas.push(amax * Math.pow(1e-4, i / (nAlphas - 1)));
+    const w = new Float64Array(k), r = Float64Array.from(yc), path = [];
+    for (const a of alphas) {
+      for (let it = 0; it < 2000; it++) {
+        let maxd = 0, maxw = 0;
+        for (let j = 0; j < k; j++) {
+          const c = cols[j]; let rho = 0;
+          for (let i = 0; i < n; i++) rho += c[i] * r[i];
+          rho += ss[j] * w[j];
+          const thr = n * a * l1Ratio;
+          const nw = (rho > thr ? rho - thr : rho < -thr ? rho + thr : 0) / (ss[j] + n * a * (1 - l1Ratio));
+          const d = nw - w[j];
+          if (d !== 0) { for (let i = 0; i < n; i++) r[i] -= d * c[i]; w[j] = nw; }
+          maxd = Math.max(maxd, Math.abs(d)); maxw = Math.max(maxw, Math.abs(nw));
+        }
+        if (maxd <= 1e-9 * Math.max(1, maxw)) break;
+      }
+      path.push(Array.from(w));
+    }
+    return { alphas, path };
+  }
+  function rankByPath(X, y, l1Ratio) {
+    const { alphas, path } = enetPath(X, y, l1Ratio);
+    const k = X[0].length, entry = Array(k).fill(Infinity);
+    path.forEach((w, i) => w.forEach((v, j) => { if (v !== 0 && entry[j] === Infinity) entry[j] = i; }));
+    const last = path[path.length - 1];
+    const order = Array.from({ length: k }, (_, j) => j).sort((a, b) => entry[a] - entry[b] || Math.abs(last[b]) - Math.abs(last[a]));
+    return { order, alphas, path };
+  }
+
+  /* ---------------- 特徵選擇 ---------------- */
+  function kfoldRMSE(X, y, idx, folds) {
+    folds = folds || 5;
+    const n = y.length; let sse = 0;
+    // sklearn KFold(shuffle=False)：前 n % k 折多 1 筆
+    let start = 0;
+    for (let f = 0; f < folds; f++) {
+      const size = Math.floor(n / folds) + (f < n % folds ? 1 : 0);
+      const te = new Set(); for (let i = start; i < start + size; i++) te.add(i);
+      start += size;
+      const Xtr = [], ytr = [], Xte = [], yte = [];
+      for (let i = 0; i < n; i++) { const r = idx.map(j => X[i][j]); if (te.has(i)) { Xte.push(r); yte.push(y[i]); } else { Xtr.push(r); ytr.push(y[i]); } }
+      try { const m = ols(Xtr, ytr); const p = m.predict(Xte); for (let i = 0; i < p.length; i++) sse += (yte[i] - p[i]) ** 2; }
+      catch (e) { return Infinity; }
+    }
+    return Math.sqrt(sse / n);
+  }
+  function makeScorer(ctx, criterion) {
+    const { Xtr, ytr, Xte, yte } = ctx;
+    return idx => {
+      if (criterion === 'test') {
+        try { const m = ols(pick(Xtr, idx), ytr); return metrics(yte, m.predict(pick(Xte, idx))).rmse; } catch (e) { return Infinity; }
+      }
+      return kfoldRMSE(Xtr, ytr, idx, 5);
+    };
+  }
+  function forward(ctx, score) {
+    const k = ctx.Xtr[0].length, sel = [], sets = [];
+    while (sel.length < k) {
+      let best = null, bs = Infinity;
+      for (let j = 0; j < k; j++) if (!sel.includes(j)) { const s = score(sel.concat(j)); if (s < bs) { bs = s; best = j; } }
+      if (best === null) break;
+      sel.push(best); sets.push(sel.slice());
+    }
+    return sets;
+  }
+  function backwardP(ctx) {
+    const k = ctx.Xtr[0].length; let cur = Array.from({ length: k }, (_, j) => j);
+    const sets = [cur.slice()], pvals = [];
+    while (cur.length > 1) {
+      let worst = -1, wp = -1, m;
+      try { m = ols(pick(ctx.Xtr, cur), ctx.ytr); } catch (e) { m = null; }
+      cur.forEach((j, pos) => { const p = m ? m.rows[pos + 1].p : 1; if (p > wp) { wp = p; worst = j; } });
+      pvals.push({ removed: worst, p: wp });
+      cur = cur.filter(j => j !== worst); sets.unshift(cur.slice());
+    }
+    return { sets, steps: pvals };
+  }
+  function rfe(ctx) {
+    const { Z } = standardize(ctx.Xtr);
+    const k = Z[0].length; let cur = Array.from({ length: k }, (_, j) => j); const sets = [cur.slice()];
+    while (cur.length > 1) {
+      let m; try { m = ols(pick(Z, cur), ctx.ytr); } catch (e) { m = null; }
+      let worst = cur[0], wv = Infinity;
+      cur.forEach((j, pos) => { const v = m ? Math.abs(m.beta[pos + 1]) : 0; if (v < wv) { wv = v; worst = j; } });
+      cur = cur.filter(j => j !== worst); sets.unshift(cur.slice());
+    }
+    return sets;
+  }
+  function exhaustive(ctx, score) {
+    const k = ctx.Xtr[0].length, best = Array(k).fill(null).map(() => ({ s: Infinity, set: null }));
+    for (let mask = 1; mask < (1 << k); mask++) {
+      const idx = []; for (let j = 0; j < k; j++) if (mask & (1 << j)) idx.push(j);
+      const s = score(idx); const b = best[idx.length - 1];
+      if (s < b.s) { b.s = s; b.set = idx; }
+    }
+    return best.map(b => b.set);
+  }
+  const ALGOS = {
+    lasso: { name: 'Lasso (L1 路徑排序)', short: 'Lasso' },
+    enet: { name: 'ElasticNet (L1+L2, l1_ratio=0.5)', short: 'ElasticNet' },
+    forward: { name: 'Forward 逐步選擇 (greedy)', short: 'Forward' },
+    backward: { name: 'Backward 逐步剔除 (p-value)', short: 'Backward' },
+    rfe: { name: 'RFE 遞迴特徵消去', short: 'RFE' },
+    exhaustive: { name: 'Exhaustive 窮舉最佳子集', short: 'Exhaustive' }
+  };
+  function nestedFromOrder(order) { return order.map((_, i) => order.slice(0, i + 1)); }
+  function selectSets(algo, ctx, criterion) {
+    const score = makeScorer(ctx, criterion);
+    switch (algo) {
+      case 'lasso': return nestedFromOrder(rankByPath(ctx.Xtr, ctx.ytr, 1).order);
+      case 'enet': return nestedFromOrder(rankByPath(ctx.Xtr, ctx.ytr, 0.5).order);
+      case 'forward': return forward(ctx, score);
+      case 'backward': return backwardP(ctx).sets;
+      case 'rfe': return rfe(ctx);
+      case 'exhaustive': return exhaustive(ctx, score);
+    }
+    throw new Error('unknown algo ' + algo);
+  }
+  /** 對每個 k 擬合 OLS，回傳訓練 / CV / 測試指標 */
+  function evaluateSets(sets, ctx) {
+    return sets.map((idx, i) => {
+      const m = ols(pick(ctx.Xtr, idx), ctx.ytr);
+      const ptr = m.predict(pick(ctx.Xtr, idx)), pte = m.predict(pick(ctx.Xte, idx));
+      const tr = metrics(ctx.ytr, ptr), te = metrics(ctx.yte, pte);
+      return { k: i + 1, idx, model: m, train: tr, test: te, cv: kfoldRMSE(ctx.Xtr, ctx.ytr, idx, 5), testAdjR2: adjR2(te.r2, te.n, idx.length), pte };
+    });
+  }
+
+  /* ---------------- 時間序列：AR(p) ---------------- */
+  function lagMatrix(series, p, start) {
+    const X = [], y = [], t = [];
+    for (let i = Math.max(p, start || 0); i < series.length; i++) { const r = []; for (let l = 1; l <= p; l++) r.push(series[i - l]); X.push(r); y.push(series[i]); t.push(i); }
+    return { X, y, t };
+  }
+  function acf(series, maxLag) {
+    const n = series.length, m = mean(series); let c0 = 0;
+    for (const v of series) c0 += (v - m) ** 2;
+    const out = [];
+    for (let l = 1; l <= maxLag; l++) { let c = 0; for (let i = l; i < n; i++) c += (series[i] - m) * (series[i - l] - m); out.push(c / c0); }
+    return out;
+  }
+  /** Durbin–Levinson */
+  function pacf(series, maxLag) {
+    const r = [1].concat(acf(series, maxLag)), out = [];
+    let phiPrev = [];
+    for (let k = 1; k <= maxLag; k++) {
+      let num = r[k], den = 1;
+      for (let j = 1; j < k; j++) { num -= phiPrev[j - 1] * r[k - j]; den -= phiPrev[j - 1] * r[j]; }
+      const pkk = num / den, phi = [];
+      for (let j = 1; j < k; j++) phi.push(phiPrev[j - 1] - pkk * phiPrev[k - j - 1]);
+      phi.push(pkk); phiPrev = phi; out.push(pkk);
+    }
+    return out;
+  }
+  /** 依時間順序切分：最後 testFrac 為測試集（不打亂） */
+  function fitAR(series, p, testFrac, start) {
+    const { X, y, t } = lagMatrix(series, p, start);
+    const nTest = Math.max(1, Math.round(y.length * testFrac)), nTr = y.length - nTest;
+    const Xtr = X.slice(0, nTr), ytr = y.slice(0, nTr), Xte = X.slice(nTr), yte = y.slice(nTr);
+    const m = ols(Xtr, ytr);
+    const ptr = m.predict(Xtr), pte = m.predict(Xte);
+    const naive = Xte.map(r => r[0]);
+    const te = metrics(yte, pte);
+    let hit = 0; for (let i = 0; i < yte.length; i++) { const prev = Xte[i][0]; if (Math.sign(pte[i] - prev) === Math.sign(yte[i] - prev)) hit++; }
+    return { p, model: m, train: metrics(ytr, ptr), test: te, naive: metrics(yte, naive), dirAcc: 100 * hit / yte.length, tTest: t.slice(nTr), tTrain: t.slice(0, nTr), pte, ptr, yte, ytr, nTr, nTest };
+  }
+  /** 遞迴預測 h 步，附 95% 預測區間（ψ 權重） */
+  function forecastAR(series, model, p, h) {
+    const hist = series.slice(), out = [];
+    const phi = model.beta.slice(1);
+    const psi = [1];
+    for (let j = 1; j < h; j++) { let s = 0; for (let i = 1; i <= Math.min(j, p); i++) s += phi[i - 1] * psi[j - i]; psi.push(s); }
+    let cum = 0; const z = 1.959963984540054;
+    for (let step = 0; step < h; step++) {
+      let v = model.beta[0]; for (let l = 1; l <= p; l++) v += phi[l - 1] * hist[hist.length - l];
+      hist.push(v); cum += psi[step] * psi[step];
+      const se = model.sigma * Math.sqrt(cum);
+      out.push({ mean: v, lo: v - z * se, hi: v + z * se });
+    }
+    return out;
+  }
+
+  root.ML = {
+    MT19937, permutation, trainTestSplit, parseCSV, toNumber, isMissing,
+    tPValue, tInv, fPValue, mean, std, metrics, adjR2, ols, vif, pick, standardize, enetPath, rankByPath,
+    kfoldRMSE, selectSets, evaluateSets, backwardP, ALGOS,
+    lagMatrix, acf, pacf, fitAR, forecastAR
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>/* app.js — UI for AIoT Regression Lab */
+(function () {
+  'use strict';
+  const ML = window.ML;
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  /* ---------- 格式化 ---------- */
+  function fmt(v, d) {
+    if (v === null || v === undefined || Number.isNaN(v)) return '—';
+    if (!Number.isFinite(v)) return '∞';
+    d = d === undefined ? 2 : d;
+    return v.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function fmtAuto(v) {
+    if (!Number.isFinite(v)) return fmt(v);
+    const a = Math.abs(v);
+    if (a !== 0 && (a < 1e-3 || a >= 1e9)) return v.toExponential(3);
+    return fmt(v, a >= 1000 ? 2 : a >= 1 ? 4 : 5);
+  }
+  function fmtP(p) {
+    if (!Number.isFinite(p)) return '—';
+    if (p < 1e-4) return p.toExponential(2);
+    return p.toFixed(4);
+  }
+  const pct = v => fmt(v * 100, 0) + '%';
+  function sigPill(p) {
+    if (!Number.isFinite(p)) return '';
+    if (p < 0.01) return '<span class="pill good">***</span>';
+    if (p < 0.05) return '<span class="pill good">**</span>';
+    if (p < 0.1) return '<span class="pill warn">*</span>';
+    return '<span class="pill bad">n.s.</span>';
+  }
+  function kpi(label, value, sub, cls) {
+    return `<div class="kpi ${cls || ''}"><span class="eyebrow">${label}</span><span class="v">${value}</span>${sub ? `<span class="s">${sub}</span>` : ''}</div>`;
+  }
+  function setStatus(msg, cls) { const el = $('ds-status'); el.className = 'status ' + (cls || ''); el.innerHTML = msg; }
+
+  /* ---------- 主題色（給 Chart.js） ---------- */
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  const charts = {};
+  function chart(id, cfg) {
+    if (!window.Chart) return;
+    if (charts[id]) charts[id].destroy();
+    const ink = css('--muted'), grid = css('--grid');
+    Chart.defaults.color = ink;
+    Chart.defaults.font.family = css('--font-body') || 'sans-serif';
+    Chart.defaults.font.size = 11;
+    cfg.options = cfg.options || {};
+    cfg.options.responsive = true; cfg.options.maintainAspectRatio = false;
+    cfg.options.animation = matchMedia('(prefers-reduced-motion: reduce)').matches ? false : { duration: 250 };
+    const sc = cfg.options.scales || {};
+    Object.values(sc).forEach(s => { s.grid = Object.assign({ color: grid }, s.grid || {}); s.border = { color: grid }; });
+    cfg.options.plugins = Object.assign({ legend: { labels: { boxWidth: 12, boxHeight: 2 } } }, cfg.options.plugins || {});
+    charts[id] = new Chart($(id), cfg);
+  }
+  const line = (label, data, color, extra) => Object.assign({ label, data, borderColor: color, backgroundColor: color, pointRadius: 3, pointHoverRadius: 5, borderWidth: 2, tension: 0 }, extra || {});
+
+  /* ---------- 資料來源 ---------- */
+  const SOURCES = {
+    mlr: [
+      { label: '50_Startups（Avik-Jain）', url: 'https://raw.githubusercontent.com/Avik-Jain/100-Days-Of-ML-Code/master/datasets/50_Startups.csv' },
+      { label: '50_Startups（harimittapalli）', url: 'https://raw.githubusercontent.com/harimittapalli/Mulitple-Linear-Reggression/master/50_Startups.csv' },
+      { label: 'Boston Housing', url: 'https://raw.githubusercontent.com/selva86/datasets/master/BostonHousing.csv' },
+      { label: 'Advertising', url: 'https://raw.githubusercontent.com/justmarkham/scikit-learn-videos/master/data/Advertising.csv' },
+      { label: '還原內建 50_Startups', builtin: 'startups' }
+    ],
+    ar: [
+      { label: '還原內建 2330.TW 快照', builtin: 'tsmc' },
+      { label: 'AirPassengers（月資料）', url: 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv' },
+      { label: 'Daily Min Temperatures', url: 'https://raw.githubusercontent.com/jbrownlee/Datasets/master/daily-min-temperatures.csv' }
+    ]
+  };
+  function normalizeUrl(u) {
+    u = u.trim();
+    let m = u.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/);
+    if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
+    m = u.match(/^https?:\/\/gist\.github\.com\/([^/]+)\/([0-9a-f]+)\/?$/i);
+    if (m) return `https://gist.githubusercontent.com/${m[1]}/${m[2]}/raw`;
+    return u;
+  }
+  async function fetchText(url) {
+    let res;
+    try { res = await fetch(url, { cache: 'no-store' }); }
+    catch (e) { throw new Error('瀏覽器無法讀取這個網址（可能是跨網域 CORS 限制或網路被擋）。請改用 GitHub raw / gist raw 連結，或下載後用「上傳 CSV」。'); }
+    if (!res.ok) throw new Error(`伺服器回應 HTTP ${res.status}，請確認網址是否正確、檔案是否公開。`);
+    return res.text();
+  }
+
+  const state = {
+    problem: 'mlr',
+    mlr: { raw: null, label: '', url: '', target: null, testSize: 0.2, seed: 0, algo: 'lasso', criterion: 'cv', k: null, cache: {} },
+    ar: { raw: null, label: '', url: '', col: null, testFrac: 0.2, p: null, h: 10 }
+  };
+
+  /* ====================================================================
+   * Problem 2：多元線性回歸
+   * ==================================================================== */
+  function prepareMLR(raw, target) {
+    const n0 = raw.n, notes = [];
+    const yRaw = raw.cols[target].map(ML.toNumber);
+    const keep = []; for (let i = 0; i < n0; i++) if (Number.isFinite(yRaw[i])) keep.push(i);
+    if (keep.length < n0) notes.push(`移除目標值缺漏的 ${n0 - keep.length} 列。`);
+    const n = keep.length;
+    if (n < 10) throw new Error('有效資料少於 10 列，無法建立回歸模型。');
+    const y = keep.map(i => yRaw[i]);
+    const numeric = [], categorical = [], ignored = [];
+    const colInfo = [];
+    raw.header.forEach(h => {
+      if (h === target) return;
+      const vals = keep.map(i => raw.cols[h][i]);
+      const nonMiss = vals.filter(v => !ML.isMissing(v));
+      const nums = nonMiss.map(ML.toNumber).filter(Number.isFinite);
+      const miss = vals.length - nonMiss.length;
+      const uniq = new Set(nonMiss).size;
+      const looksId = /^(id|index|no\.?|編號|序號|unnamed:?\s*\d*)$/i.test(h.trim()) ||
+        (nums.length === vals.length && nums.every((v, i) => v === nums[0] + i));
+      if (looksId && nums.length === nonMiss.length) {
+        ignored.push({ h, why: 'ID / 流水號欄' });
+        colInfo.push({ h, type: 'ignored', miss, uniq });
+      } else if (nonMiss.length && nums.length / nonMiss.length >= 0.95) {
+        const parsed = vals.map(ML.toNumber);
+        const fin = parsed.filter(Number.isFinite), mu = fin.length ? ML.mean(fin) : 0;
+        const missN = parsed.filter(v => !Number.isFinite(v)).length;
+        if (missN) notes.push(`<code>${esc(h)}</code> 有 ${missN} 個缺值，以平均數 ${fmtAuto(mu)} 填補。`);
+        const filled = parsed.map(v => (Number.isFinite(v) ? v : mu));
+        if (ML.std(filled) === 0) { ignored.push({ h, why: '常數欄' }); return; }
+        numeric.push({ h, values: filled, mean: ML.mean(filled) });
+        colInfo.push({ h, type: 'numeric', miss, uniq });
+      } else if (uniq >= 2 && uniq <= Math.min(30, Math.max(2, Math.floor(0.5 * n)))) {
+        const cats = Array.from(new Set(vals.map(v => (ML.isMissing(v) ? 'Missing' : v)))).sort();
+        categorical.push({ h, values: vals.map(v => (ML.isMissing(v) ? 'Missing' : v)), cats });
+        colInfo.push({ h, type: 'categorical', miss, uniq });
+      } else {
+        ignored.push({ h, why: uniq < 2 ? '只有一種值' : '文字/ID 欄（類別太多）' });
+        colInfo.push({ h, type: 'ignored', miss, uniq });
+      }
+    });
+    // 特徵矩陣：數值欄 → one-hot（drop_first）
+    const feats = [];
+    numeric.forEach(c => feats.push({ name: c.h, src: c.h, kind: 'num' }));
+    categorical.forEach(c => c.cats.slice(1).forEach(cat => feats.push({ name: `${c.h}_${cat}`, src: c.h, kind: 'dummy', cat })));
+    if (!feats.length) throw new Error('找不到可用的特徵欄位（需要數值或少量類別的欄）。');
+    const X = [];
+    for (let r = 0; r < n; r++) {
+      X.push(feats.map(f => {
+        if (f.kind === 'num') return numeric.find(c => c.h === f.src).values[r];
+        return categorical.find(c => c.h === f.src).values[r] === f.cat ? 1 : 0;
+      }));
+    }
+    return { n, y, X, feats, numeric, categorical, ignored, notes, keep, colInfo, target };
+  }
+
+  function pickDefaultTarget(raw) {
+    const numCols = raw.header.filter(h => { const v = raw.cols[h].filter(s => !ML.isMissing(s)); return v.length && v.filter(s => Number.isFinite(ML.toNumber(s))).length / v.length >= 0.95; });
+    const pref = numCols.find(h => /^(profit|target|y|price|medv|sales|label)$/i.test(h.trim()));
+    return pref || numCols[numCols.length - 1] || raw.header[raw.header.length - 1];
+  }
+
+  function mlrCtx() {
+    const s = state.mlr, D = s.data;
+    const sp = ML.trainTestSplit(D.n, s.testSize, s.seed);
+    return {
+      D, sp,
+      Xtr: sp.train.map(i => D.X[i]), ytr: sp.train.map(i => D.y[i]),
+      Xte: sp.test.map(i => D.X[i]), yte: sp.test.map(i => D.y[i])
+    };
+  }
+
+  function algoAllowed(a, p) { return a !== 'exhaustive' || p <= 12; }
+
+  function getEval(algo) {
+    const s = state.mlr, key = `${algo}|${s.criterion}`;
+    if (!s.cache[key]) {
+      const sets = ML.selectSets(algo, s.ctx, s.criterion);
+      s.cache[key] = ML.evaluateSets(sets, s.ctx);
+    }
+    return s.cache[key];
+  }
+  const critOf = (e, crit) => (crit === 'test' ? e.test.rmse : e.cv);
+  function bestK(ev, crit) { let b = ev[0]; ev.forEach(e => { if (critOf(e, crit) < critOf(b, crit)) b = e; }); return b.k; }
+
+  function loadMLR(raw, label, url) {
+    const s = state.mlr;
+    s.raw = raw; s.label = label; s.url = url || '';
+    const sel = $('m-target');
+    sel.innerHTML = raw.header.map(h => `<option>${esc(h)}</option>`).join('');
+    s.target = pickDefaultTarget(raw);
+    sel.value = s.target;
+    s.k = null;
+    rebuildMLR();
+  }
+
+  function rebuildMLR() {
+    const s = state.mlr;
+    try {
+      s.data = prepareMLR(s.raw, s.target);
+      s.ctx = mlrCtx();
+      if (s.ctx.ytr.length <= s.data.feats.length + 2) throw new Error(`訓練集只有 ${s.ctx.ytr.length} 筆，但有 ${s.data.feats.length} 個特徵，請降低測試集比例或換資料集。`);
+      s.cache = {};
+      if (!algoAllowed(s.algo, s.data.feats.length)) s.algo = 'lasso';
+      s.k = null;
+      renderMLRUnderstanding();
+      renderMLRPrep();
+      renderMLRModel();
+      setStatus(`已載入 <b>${esc(s.label)}</b>：${s.data.n} 列 × ${s.raw.header.length} 欄，目標 <code>${esc(s.target)}</code>，${s.data.feats.length} 個特徵（含 one-hot）。`, 'ok');
+    } catch (e) {
+      console.error(e);
+      setStatus('無法建立模型：' + esc(e.message), 'err');
+    }
+  }
+
+  function renderMLRUnderstanding() {
+    const s = state.mlr, D = s.data, raw = s.raw;
+    document.querySelectorAll('.tname').forEach(el => { el.textContent = s.target; });
+    const featTxt = D.feats.length <= 8 ? D.numeric.map(c => c.h).concat(D.categorical.map(c => c.h)).map(h => `<code>${esc(h)}</code>`).join('、') : `${D.numeric.length + D.categorical.length} 個欄位`;
+    $('m-biz').innerHTML = `目標：用 ${featTxt} 預測 <b>${esc(s.target)}</b>，並找出哪些因素真正影響 ${esc(s.target)}，以最少的特徵達到最好的預測效果（Occam's razor）。`;
+    const missing = raw.header.reduce((a, h) => a + raw.cols[h].filter(ML.isMissing).length, 0);
+    $('m-kpis').innerHTML = kpi('樣本數', D.n) + kpi('欄位數', raw.header.length) + kpi('數值特徵', D.numeric.length) + kpi('類別特徵', D.categorical.length, D.categorical.map(c => `${esc(c.h)}: ${c.cats.length} 類`).join('、')) + kpi('缺值格數', missing, missing ? '已處理' : '無缺值');
+    // head
+    const hdr = raw.header;
+    $('m-head').innerHTML = `<thead><tr><th>#</th>${hdr.map(h => `<th class="${h === s.target ? '' : ''}">${esc(h)}</th>`).join('')}</tr></thead><tbody>` +
+      Array.from({ length: Math.min(8, raw.n) }, (_, i) => `<tr><td>${i}</td>${hdr.map(h => { const v = raw.cols[h][i]; const num = ML.toNumber(v); return Number.isFinite(num) && String(v).trim() !== '' ? `<td>${esc(v)}</td>` : `<td class="txt">${esc(v)}</td>`; }).join('')}</tr>`).join('') + '</tbody>';
+    // describe
+    const numCols = D.numeric.map(c => ({ h: c.h, v: c.values })).concat([{ h: s.target, v: D.y, t: true }]);
+    const q = (arr, p) => { const a = arr.slice().sort((x, y) => x - y); const idx = (a.length - 1) * p, lo = Math.floor(idx); return a[lo] + (a[Math.min(lo + 1, a.length - 1)] - a[lo]) * (idx - lo); };
+    $('m-describe').innerHTML = '<thead><tr><th>欄位</th><th>型態</th><th>mean</th><th>std</th><th>min</th><th>25%</th><th>50%</th><th>75%</th><th>max</th></tr></thead><tbody>' +
+      numCols.map(c => `<tr><td class="txt">${esc(c.h)}${c.t ? ' <span class="pill acc">y</span>' : ''}</td><td class="txt">數值</td><td>${fmt(ML.mean(c.v))}</td><td>${fmt(ML.std(c.v, 1))}</td><td>${fmt(Math.min(...c.v))}</td><td>${fmt(q(c.v, .25))}</td><td>${fmt(q(c.v, .5))}</td><td>${fmt(q(c.v, .75))}</td><td>${fmt(Math.max(...c.v))}</td></tr>`).join('') +
+      D.categorical.map(c => `<tr><td class="txt">${esc(c.h)}</td><td class="txt">類別</td><td colspan="7" class="txt">${c.cats.map(k => `${esc(k)} (${c.values.filter(v => v === k).length})`).join('、')}</td></tr>`).join('') +
+      D.ignored.map(c => `<tr><td class="txt">${esc(c.h)}</td><td class="txt">忽略</td><td colspan="7" class="txt">${esc(c.why)}</td></tr>`).join('') + '</tbody>';
+    // correlation
+    const corr = D.feats.map((f, j) => { const x = D.X.map(r => r[j]); const mx = ML.mean(x), my = ML.mean(D.y); let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < D.n; i++) { sxy += (x[i] - mx) * (D.y[i] - my); sxx += (x[i] - mx) ** 2; syy += (D.y[i] - my) ** 2; } return { name: f.name, r: sxy / Math.sqrt(sxx * syy), j }; }).sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+    const top = corr.slice(0, 15);
+    chart('c-corr', {
+      type: 'bar',
+      data: { labels: top.map(c => c.name), datasets: [{ label: 'r', data: top.map(c => c.r), backgroundColor: top.map(c => (c.r >= 0 ? css('--train') : css('--test'))), borderRadius: 3 }] },
+      options: { indexAxis: 'y', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => 'r = ' + c.raw.toFixed(3) } } }, scales: { x: { min: -1, max: 1 }, y: { ticks: { autoSkip: false } } } }
+    });
+    const best = corr[0];
+    $('m-scatter-cap').textContent = `${best.name} vs ${s.target}（r = ${best.r.toFixed(3)}）`;
+    chart('c-scatter', {
+      type: 'scatter',
+      data: { datasets: [{ label: s.target, data: D.X.map((r, i) => ({ x: r[best.j], y: D.y[i] })), backgroundColor: css('--train'), pointRadius: 3.5 }] },
+      options: { plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: best.name } }, y: { title: { display: true, text: s.target } } } }
+    });
+  }
+
+  function renderMLRPrep() {
+    const s = state.mlr, D = s.data, ctx = s.ctx;
+    $('m-test-out').textContent = pct(s.testSize);
+    const steps = [];
+    steps.push(`分離特徵 X 與目標 y＝<code>${esc(s.target)}</code>。`);
+    D.notes.forEach(n => steps.push(n));
+    if (D.categorical.length) steps.push(`類別欄 ${D.categorical.map(c => `<code>${esc(c.h)}</code>`).join('、')} 做 One-Hot Encoding，並丟掉第一類（${D.categorical.map(c => esc(c.cats[0])).join('、')}）避免 dummy variable trap：<code>pd.get_dummies(drop_first=True)</code>。`);
+    if (D.ignored.length) steps.push(`忽略欄位：${D.ignored.map(c => `<code>${esc(c.h)}</code>（${esc(c.why)}）`).join('、')}。`);
+    steps.push(`最終特徵 ${D.feats.length} 個：${D.feats.map(f => `<code>${esc(f.name)}</code>`).join(' ')}`);
+    steps.push(`<code>train_test_split(test_size=${s.testSize}, random_state=${s.seed})</code> → 訓練 ${ctx.ytr.length} 筆、測試 ${ctx.yte.length} 筆（與 sklearn 相同的亂數切分；測試集 index：${ctx.sp.test.slice(0, 12).join(', ')}${ctx.sp.test.length > 12 ? '…' : ''}）。`);
+    $('m-prep').innerHTML = steps.map(t => `<li>${t}</li>`).join('');
+    const url = s.url || 'https://raw.githubusercontent.com/Avik-Jain/100-Days-Of-ML-Code/master/datasets/50_Startups.csv';
+    const cats = D.categorical.map(c => `'${c.h}'`).join(', ');
+    $('m-code').textContent =
+`import numpy as np, pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression, Lasso
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+
+# 1. Data Understanding
+df = pd.read_csv("${url}")
+print(df.head()); print(df.describe())
+
+# 2. Data Preparation
+y = df["${s.target}"]
+X = df.drop(columns=["${s.target}"${D.ignored.length ? ', ' + D.ignored.map(c => `"${c.h}"`).join(', ') : ''}])
+${D.categorical.length ? `X = pd.get_dummies(X, columns=[${cats}], drop_first=True).astype(float)\n` : ''}X = X.fillna(X.mean(numeric_only=True))
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=${s.testSize}, random_state=${s.seed})
+
+# 3. Modeling：依特徵數 k = 1..${D.feats.length} 擬合 OLS（特徵順序由選擇演算法決定）
+def evaluate(cols):
+    m = LinearRegression().fit(X_train[cols], y_train)
+    p = m.predict(X_test[cols])
+    return np.sqrt(mean_squared_error(y_test, p)), r2_score(y_test, p), mean_absolute_error(y_test, p)
+
+# 4. Evaluation
+for k in range(1, X.shape[1] + 1):
+    cols = ranking[:k]          # ranking 來自 Lasso / Forward / RFE…
+    print(k, cols, evaluate(cols))`;
+  }
+
+  function renderAlgoButtons() {
+    const s = state.mlr, p = s.data.feats.length;
+    const keys = Object.keys(ML.ALGOS);
+    $('m-algos').innerHTML = keys.map(k => `<button type="button" role="tab" data-algo="${k}" aria-selected="${s.algo === k}" ${algoAllowed(k, p) ? '' : 'disabled title="特徵超過 12 個時窮舉太慢"'}>${ML.ALGOS[k].short}</button>`).join('') +
+      `<button type="button" role="tab" class="all" data-algo="all" aria-selected="${s.algo === 'all'}">全部比較</button>`;
+  }
+
+  const ALGO_NOTES = {
+    lasso: '在標準化後的訓練資料上跑 Lasso 正則化路徑（α 由大到小），特徵越早出現非零係數排名越前；取前 k 名再用 OLS 擬合。',
+    enet: 'ElasticNet 同時用 L1 + L2 懲罰（l1_ratio = 0.5），對高度相關的特徵較穩定；依路徑進入順序排名。',
+    forward: '從空集合開始，每次加入讓「挑選準則」最小的特徵（greedy forward selection，課堂 Part 2 的做法）。',
+    backward: '從全部特徵開始，每次剔除 p-value 最大的特徵（課堂筆記：Backward selection 最常用，p < 0.05 顯著）。',
+    rfe: '用標準化係數的絕對值當重要度，每輪剔除最不重要的特徵（Recursive Feature Elimination）。',
+    exhaustive: '對每個 k 試遍所有組合（2^p − 1 種），挑準則最小的子集；保證找到最佳但最耗時。',
+    all: '同時比較所有特徵選擇演算法在每個 k 的測試集 RMSE。'
+  };
+
+  function renderMLRModel() {
+    const s = state.mlr, D = s.data, p = D.feats.length;
+    renderAlgoButtons();
+    const kIn = $('m-k'); kIn.max = p;
+    $('m-algo-note').textContent = ALGO_NOTES[s.algo] + (s.criterion === 'test' ? '　⚠ 以測試集挑選特徵會讓測試分數偏樂觀（資料洩漏），這裡保留是為了對照課堂結果。' : '');
+    if (s.algo === 'all') return renderCompare();
+    const ev = getEval(s.algo);
+    const bk = bestK(ev, s.criterion);
+    if (s.k === null || s.k > p) s.k = bk;
+    kIn.value = s.k; $('m-k-out').textContent = s.k;
+    $('m-k-wrap').hidden = false;
+    $('m-results').innerHTML = '<thead><tr><th>k</th><th class="txt">Selected Features</th><th>CV RMSE</th><th>Train RMSE</th><th>Test RMSE</th><th>Test R²</th><th>Train Adj R²</th><th>Test MAE</th></tr></thead><tbody>' +
+      ev.map(e => `<tr data-k="${e.k}" class="${e.k === s.k ? 'sel' : ''}"><td>${e.k}${e.k === bk ? ' <span class="pill good">best</span>' : ''}</td><td class="txt">${e.idx.map(j => esc(D.feats[j].name)).join(', ')}</td><td>${fmt(e.cv)}</td><td>${fmt(e.train.rmse)}</td><td>${fmt(e.test.rmse)}</td><td>${e.test.r2.toFixed(4)}</td><td>${e.model.adjR2.toFixed(4)}</td><td>${fmt(e.test.mae)}</td></tr>`).join('') + '</tbody>';
+    const ks = ev.map(e => e.k);
+    const ptR = ks.map(k => (k === s.k ? 6 : 3));
+    chart('c-rmse', {
+      type: 'line',
+      data: { labels: ks, datasets: [line('Test RMSE', ev.map(e => e.test.rmse), css('--test'), { pointRadius: ptR }), line('CV RMSE (train 5-fold)', ev.map(e => e.cv), css('--cv'), { borderDash: [5, 4] }), line('Train RMSE', ev.map(e => e.train.rmse), css('--train'))] },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Number of Features' } }, y: { title: { display: true, text: 'RMSE' } } } }
+    });
+    chart('c-r2', {
+      type: 'line',
+      data: { labels: ks, datasets: [line('Test R²', ev.map(e => e.test.r2), css('--test'), { pointRadius: ptR }), line('Train R²', ev.map(e => e.train.r2), css('--train')), line('Train Adj R²', ev.map(e => e.model.adjR2), css('--naive'), { borderDash: [5, 4] })] },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Number of Features' } }, y: { title: { display: true, text: 'R-squared' } } } }
+    });
+    const full = ev[ev.length - 1], b = ev[bk - 1];
+    const v = $('m-fit-verdict');
+    if (bk < p && full.test.rmse > b.test.rmse) {
+      v.className = 'callout warn';
+      v.innerHTML = `<b>甜蜜點 k = ${bk}</b>（${b.idx.map(j => esc(D.feats[j].name)).join(', ')}）：Test RMSE ${fmt(b.test.rmse)}。全部 ${p} 個特徵時 Test RMSE 升到 ${fmt(full.test.rmse)}（+${fmt(full.test.rmse - b.test.rmse)}），但 Train RMSE 反而降到 ${fmt(full.train.rmse)}：訓練誤差下降、測試誤差上升，是加入雜訊特徵造成的<b>過度擬合</b>。`;
+    } else {
+      v.className = 'callout good';
+      v.innerHTML = `依「${s.criterion === 'cv' ? 'CV RMSE' : 'Test RMSE'}」最佳的是 <b>k = ${bk}</b>，Test RMSE ${fmt(b.test.rmse)}、Test R² ${b.test.r2.toFixed(4)}。訓練與測試誤差差距 ${fmt(Math.abs(b.test.rmse - b.train.rmse))}，可用來判斷過擬合 / 欠擬合。`;
+    }
+    renderMLREval(ev[s.k - 1]);
+  }
+
+  function renderCompare() {
+    const s = state.mlr, D = s.data, p = D.feats.length;
+    $('m-k-wrap').hidden = true;
+    const algos = Object.keys(ML.ALGOS).filter(a => algoAllowed(a, p));
+    const evs = algos.map(a => ({ a, ev: getEval(a) }));
+    const ks = Array.from({ length: p }, (_, i) => i + 1);
+    const palette = [css('--train'), css('--test'), css('--cv'), css('--warn'), css('--bad'), css('--naive')];
+    $('m-results').innerHTML = `<thead><tr><th>演算法</th>${ks.map(k => `<th>k=${k}</th>`).join('')}<th class="txt">最佳子集（依準則）</th></tr></thead><tbody>` +
+      evs.map(({ a, ev }) => { const bk = bestK(ev, s.criterion); const minT = Math.min(...ev.map(e => e.test.rmse)); return `<tr data-algo="${a}"><td>${ML.ALGOS[a].short}</td>${ev.map(e => `<td>${e.test.rmse === minT ? '<b>' + fmt(e.test.rmse) + '</b>' : fmt(e.test.rmse)}</td>`).join('')}<td class="txt">k=${bk}：${ev[bk - 1].idx.map(j => esc(D.feats[j].name)).join(', ')}</td></tr>`; }).join('') + '</tbody>';
+    chart('c-rmse', {
+      type: 'line',
+      data: { labels: ks, datasets: evs.map(({ a, ev }, i) => line(ML.ALGOS[a].short, ev.map(e => e.test.rmse), palette[i % palette.length], { borderDash: i % 2 ? [5, 4] : [] })) },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Number of Features' } }, y: { title: { display: true, text: 'Test RMSE' } } } }
+    });
+    chart('c-r2', {
+      type: 'line',
+      data: { labels: ks, datasets: evs.map(({ a, ev }, i) => line(ML.ALGOS[a].short, ev.map(e => e.test.r2), palette[i % palette.length], { borderDash: i % 2 ? [5, 4] : [] })) },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Number of Features' } }, y: { title: { display: true, text: 'Test R²' } } } }
+    });
+    let gb = null; evs.forEach(({ a, ev }) => ev.forEach(e => { if (!gb || e.test.rmse < gb.e.test.rmse) gb = { a, e }; }));
+    $('m-fit-verdict').className = 'callout';
+    $('m-fit-verdict').innerHTML = `${evs.length} 種演算法中測試集 RMSE 最低：<b>${ML.ALGOS[gb.a].short}, k = ${gb.e.k}</b>（${gb.e.idx.map(j => esc(D.feats[j].name)).join(', ')}），RMSE ${fmt(gb.e.test.rmse)}。點表格任一列可切換到該演算法。`;
+    const ev0 = getEval(algos[0]);
+    renderMLREval(ev0[bestK(ev0, s.criterion) - 1]);
+  }
+
+  function renderMLREval(e) {
+    const s = state.mlr, D = s.data, ctx = s.ctx, m = e.model;
+    const names = e.idx.map(j => D.feats[j].name);
+    $('m-eval-title').textContent = `${s.algo === 'all' ? ML.ALGOS[Object.keys(ML.ALGOS)[0]].short : ML.ALGOS[s.algo].short} · k = ${e.k}`;
+    $('m-metrics').innerHTML = kpi('Test R²', e.test.r2.toFixed(4), `${pct(Math.max(0, e.test.r2))} 變異被解釋`, e.test.r2 > 0.9 ? 'good' : e.test.r2 < 0.5 ? 'bad' : '') +
+      kpi('Train Adj R²', m.adjR2.toFixed(4), `Train R² ${m.r2.toFixed(4)}`) +
+      kpi('Test RMSE', fmt(e.test.rmse), `Train ${fmt(e.train.rmse)}`) +
+      kpi('Test MAE', fmt(e.test.mae)) +
+      kpi('Test MSE', fmt(e.test.mse, 0)) +
+      kpi('F-statistic', fmt(m.F), 'p = ' + fmtP(m.Fp));
+    $('m-eq').innerHTML = `<span class="y">ŷ</span>（${esc(s.target)}）= ${fmtAuto(m.beta[0])}` + names.map((nm, i) => { const b = m.beta[i + 1]; return ` ${b < 0 ? '−' : '+'} ${fmtAuto(Math.abs(b))} × ${esc(nm)}`; }).join('');
+    const vifs = e.idx.length > 1 ? ML.vif(ML.pick(ctx.Xtr, e.idx)) : [1];
+    $('m-coef').innerHTML = '<thead><tr><th>變數</th><th>β 係數</th><th>Std. Error</th><th>t</th><th>p-value</th><th>顯著</th><th>95% CI 下界</th><th>95% CI 上界</th><th>VIF</th></tr></thead><tbody>' +
+      m.rows.map((r, i) => { const vf = i === 0 ? null : vifs[i - 1]; return `<tr><td class="txt">${i === 0 ? 'Intercept (β₀)' : esc(names[i - 1])}</td><td>${fmtAuto(r.coef)}</td><td>${fmtAuto(r.se)}</td><td>${fmt(r.t, 3)}</td><td>${fmtP(r.p)}</td><td>${sigPill(r.p)}</td><td>${fmtAuto(r.lo)}</td><td>${fmtAuto(r.hi)}</td><td>${vf === null ? '—' : fmt(vf, 2) + (vf > 10 ? ' <span class="pill bad">高共線</span>' : vf > 5 ? ' <span class="pill warn">注意</span>' : '')}</td></tr>`; }).join('') + '</tbody>';
+    const all = ctx.yte.concat(e.pte), lo = Math.min(...all), hi = Math.max(...all);
+    chart('c-avp', {
+      type: 'scatter',
+      data: { datasets: [
+        { label: '測試樣本', data: ctx.yte.map((y, i) => ({ x: y, y: e.pte[i] })), backgroundColor: css('--test'), pointRadius: 5 },
+        { type: 'line', label: 'y = x（完美預測）', data: [{ x: lo, y: lo }, { x: hi, y: hi }], borderColor: css('--naive'), borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 }
+      ] },
+      options: { scales: { x: { title: { display: true, text: 'Actual ' + s.target } }, y: { title: { display: true, text: 'Predicted ' + s.target } } } }
+    });
+    const res = ctx.yte.map((y, i) => ({ row: s.data.keep[ctx.sp.test[i]], y, p: e.pte[i], r: y - e.pte[i] })).sort((a, b) => Math.abs(b.r) - Math.abs(a.r)).slice(0, 10);
+    $('m-resid').innerHTML = '<thead><tr><th>#</th><th>列</th><th>Actual</th><th>Predicted</th><th>Residual</th><th>誤差 %</th><th>狀態</th></tr></thead><tbody>' +
+      res.map((r, i) => { const z = Math.abs(r.r) / m.sigma; return `<tr><td>${i + 1}</td><td>${r.row}</td><td>${fmt(r.y)}</td><td>${fmt(r.p)}</td><td>${fmt(r.r)}</td><td>${r.y ? fmt(100 * Math.abs(r.r / r.y), 1) + '%' : '—'}</td><td>${z > 2 ? '<span class="pill bad">離群 >2σ</span>' : z > 1 ? '<span class="pill warn">偏大</span>' : '<span class="pill good">正常</span>'}</td></tr>`; }).join('') + '</tbody>';
+    renderPredictor(e);
+  }
+
+  function renderPredictor(e) {
+    const s = state.mlr, D = s.data;
+    s.current = e;
+    const srcs = []; e.idx.forEach(j => { const f = D.feats[j]; if (!srcs.includes(f.src)) srcs.push(f.src); });
+    const form = $('m-pred-form');
+    const prev = {}; form.querySelectorAll('[data-src]').forEach(el => { prev[el.dataset.src] = el.value; });
+    form.innerHTML = srcs.map((src, i) => {
+      const cat = D.categorical.find(c => c.h === src);
+      const id = 'pf-' + i;
+      if (cat) return `<label for="${id}">${esc(src)}<select id="${id}" data-src="${esc(src)}">${cat.cats.map(c => `<option${prev[src] === c ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select></label>`;
+      const num = D.numeric.find(c => c.h === src);
+      const val = prev[src] !== undefined ? prev[src] : Math.round(num.mean * 100) / 100;
+      return `<label for="${id}">${esc(src)}<input id="${id}" type="number" step="any" data-src="${esc(src)}" value="${val}"></label>`;
+    }).join('');
+    updatePrediction();
+    const model = {
+      problem: 'multiple_linear_regression', target: s.target, algorithm: s.algo === 'all' ? 'lasso' : s.algo, k: e.k,
+      features: e.idx.map(j => D.feats[j].name), intercept: e.model.beta[0],
+      coefficients: Object.fromEntries(e.idx.map((j, i) => [D.feats[j].name, e.model.beta[i + 1]])),
+      encoding: Object.fromEntries(D.categorical.map(c => [c.h, { dropped_first: c.cats[0], categories: c.cats }])),
+      split: { test_size: s.testSize, random_state: s.seed }, metrics: { test_rmse: e.test.rmse, test_r2: e.test.r2, test_mae: e.test.mae }
+    };
+    $('m-json').textContent = JSON.stringify(model, null, 2);
+  }
+
+  function updatePrediction() {
+    const s = state.mlr, D = s.data, e = s.current; if (!e) return;
+    const vals = {}; $('m-pred-form').querySelectorAll('[data-src]').forEach(el => { vals[el.dataset.src] = el.value; });
+    let yhat = e.model.beta[0]; const parts = [`β₀ = ${fmtAuto(e.model.beta[0])}`]; let bad = false;
+    e.idx.forEach((j, i) => {
+      const f = D.feats[j]; let x;
+      if (f.kind === 'num') { x = ML.toNumber(vals[f.src]); if (!Number.isFinite(x)) bad = true; }
+      else x = vals[f.src] === f.cat ? 1 : 0;
+      const c = e.model.beta[i + 1] * x; yhat += c;
+      parts.push(`${f.name}: ${fmtAuto(e.model.beta[i + 1])} × ${fmtAuto(x)} = ${fmt(c)}`);
+    });
+    $('m-pred').textContent = bad ? '請輸入數字' : fmt(yhat);
+    $('m-pred-break').innerHTML = parts.map(esc).join('<br>');
+  }
+
+  /* ====================================================================
+   * Problem 1：AR 股價
+   * ==================================================================== */
+  function parseDate(s) {
+    s = String(s).trim();
+    let m = s.match(/^(\d{2,3})\/(\d{1,2})\/(\d{1,2})$/); // 民國
+    if (m) return new Date(Date.UTC(+m[1] + 1911, +m[2] - 1, +m[3]));
+    m = s.match(/^(\d{4})[-/.](\d{1,2})(?:[-/.](\d{1,2}))?/);
+    if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, m[3] ? +m[3] : 1));
+    if (/^\d{8}$/.test(s)) return new Date(Date.UTC(+s.slice(0, 4), +s.slice(4, 6) - 1, +s.slice(6, 8)));
+    const t = Date.parse(s); return Number.isFinite(t) && /[a-z\-/]/i.test(s) ? new Date(t) : null;
+  }
+  const ymd = d => d.toISOString().slice(0, 10);
+
+  function prepareAR(raw, col) {
+    const dateCol = raw.header.find(h => /date|time|日期|時間|month|day/i.test(h)) || raw.header.find(h => raw.cols[h].slice(0, 20).filter(v => parseDate(v)).length >= 15);
+    if (!dateCol) throw new Error('找不到日期欄（欄名需含 Date / 日期，或內容可解析為日期）。');
+    const numCols = raw.header.filter(h => h !== dateCol && raw.cols[h].filter(v => Number.isFinite(ML.toNumber(v))).length >= 0.9 * raw.n);
+    if (!numCols.length) throw new Error('找不到數值欄。');
+    if (!col || !numCols.includes(col)) col = numCols.find(h => /^(adj\s*close|close|收盤價?|price|value)$/i.test(h.trim())) || numCols[numCols.length - 1];
+    const pts = [];
+    for (let i = 0; i < raw.n; i++) { const d = parseDate(raw.cols[dateCol][i]), v = ML.toNumber(raw.cols[col][i]); if (d && Number.isFinite(v)) pts.push({ d, v }); }
+    pts.sort((a, b) => a.d - b.d);
+    const uniq = pts.filter((p, i) => i === 0 || +p.d !== +pts[i - 1].d);
+    if (uniq.length < 30) throw new Error('有效時間點少於 30 筆，不足以建立 AR 模型。');
+    return { dateCol, col, numCols, dates: uniq.map(p => p.d), y: uniq.map(p => p.v), dropped: raw.n - uniq.length };
+  }
+
+  function loadAR(raw, label, url) {
+    const s = state.ar;
+    s.raw = raw; s.label = label; s.url = url || ''; s.col = null; s.p = null;
+    rebuildAR();
+  }
+
+  function rebuildAR() {
+    const s = state.ar;
+    try {
+      s.data = prepareAR(s.raw, s.col);
+      s.col = s.data.col;
+      const D = s.data;
+      $('a-col').innerHTML = D.numCols.map(h => `<option${h === s.col ? ' selected' : ''}>${esc(h)}</option>`).join('');
+      $('a-col-wrap').hidden = D.numCols.length < 2;
+      s.maxP = Math.max(1, Math.min(20, Math.floor(D.y.length / 8)));
+      s.sweep = [];
+      for (let p = 1; p <= s.maxP; p++) {
+        try { s.sweep.push(ML.fitAR(D.y, p, s.testFrac, s.maxP)); }
+        catch (err) { if (p === 1) throw err; break; }   // 更高階數共線 → 停在可估計的最大 p
+      }
+      s.maxP = s.sweep.length;
+      let best = s.sweep[0]; s.sweep.forEach(f => { if (f.model.aic < best.model.aic) best = f; });
+      s.bestP = best.p;
+      if (s.p === null || s.p > s.maxP) s.p = s.bestP;
+      renderARUnderstanding(); renderARPrep(); renderARModel();
+      setStatus(`已載入 <b>${esc(s.label)}</b>：${D.y.length} 個時間點（${ymd(D.dates[0])} → ${ymd(D.dates[D.dates.length - 1])}），欄位 <code>${esc(s.col)}</code>。`, 'ok');
+    } catch (e) {
+      console.error(e);
+      setStatus('無法建立模型：' + esc(e.message), 'err');
+    }
+  }
+
+  function renderARUnderstanding() {
+    const s = state.ar, D = s.data, y = D.y, n = y.length;
+    const isTsmc = /2330/.test(s.label);
+    $('a-biz').innerHTML = `目標：以 <b>${esc(s.label)}</b> 的歷史 <code>${esc(s.col)}</code> 序列，預測下一期的值，並評估單純用「過去價格」能否打敗最簡單的 naive 預測。${isTsmc ? '台積電是台股權值最大的個股，股價走勢常被當作台股與半導體景氣的觀察指標。' : ''}`;
+    const ret = []; for (let i = 1; i < n; i++) ret.push(Math.log(y[i] / y[i - 1]));
+    const vol = ret.length && y.every(v => v > 0) ? ML.std(ret, 1) * Math.sqrt(252) : NaN;
+    $('a-kpis').innerHTML = kpi('時間點', n) + kpi('期間', `${ymd(D.dates[0]).slice(2)} → ${ymd(D.dates[n - 1]).slice(2)}`) + kpi('最新值', fmt(y[n - 1]), ymd(D.dates[n - 1])) +
+      kpi('期間漲跌', (y[n - 1] >= y[0] ? '+' : '') + fmt(100 * (y[n - 1] / y[0] - 1), 1) + '%', `${fmt(y[0])} → ${fmt(y[n - 1])}`) + kpi('最高 / 最低', `${fmt(Math.max(...y), 0)} / ${fmt(Math.min(...y), 0)}`) + kpi('年化波動', Number.isFinite(vol) ? fmt(100 * vol, 1) + '%' : '—', 'log 報酬 × √252');
+    $('a-line-cap').textContent = `${s.label} · ${s.col}`;
+    chart('c-price', {
+      type: 'line',
+      data: { labels: D.dates.map(ymd), datasets: [line(s.col, y, css('--train'), { pointRadius: 0, borderWidth: 1.8, fill: false })] },
+      options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } }, y: { title: { display: true, text: s.col } } } }
+    });
+    const L = Math.min(20, Math.floor(n / 4)), pa = ML.pacf(y, L), band = 1.96 / Math.sqrt(n);
+    chart('c-pacf', {
+      type: 'bar',
+      data: { labels: pa.map((_, i) => i + 1), datasets: [
+        { label: 'PACF', data: pa, backgroundColor: pa.map(v => (Math.abs(v) > band ? css('--train') : css('--naive'))), borderRadius: 2 },
+        { type: 'line', label: '+1.96/√n', data: pa.map(() => band), borderColor: css('--test'), borderDash: [4, 4], pointRadius: 0, borderWidth: 1 },
+        { type: 'line', label: '−1.96/√n', data: pa.map(() => -band), borderColor: css('--test'), borderDash: [4, 4], pointRadius: 0, borderWidth: 1 }
+      ] },
+      options: { plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Lag' } }, y: { min: -1, max: 1 } } }
+    });
+  }
+
+  function renderARPrep() {
+    const s = state.ar, D = s.data, f = s.sweep[s.p - 1];
+    $('a-test-out').textContent = pct(s.testFrac);
+    const steps = [
+      `解析日期欄 <code>${esc(D.dateCol)}</code>、依時間排序並去除重複${D.dropped ? `（略過 ${D.dropped} 筆無法解析的列）` : ''}。`,
+      `建立落後特徵 <code>lag_1 … lag_p</code>：第 t 天的特徵是前 p 天的 ${esc(D.col)}（<code>df.shift(1..p)</code>）。`,
+      `為了公平比較不同 p，所有模型都從第 ${s.maxP + 1} 筆開始建樣本（前 ${s.maxP} 筆只當落後值），共 ${f.nTr + f.nTest} 筆。`,
+      `<b>依時間順序切分，不打亂</b>：前 ${f.nTr} 筆訓練（到 ${ymd(D.dates[f.tTrain[f.tTrain.length - 1]])}），最後 ${f.nTest} 筆測試（${ymd(D.dates[f.tTest[0]])} 起）。股價有時間相依性，隨機切分會讓模型偷看到未來。`
+    ];
+    $('a-prep').innerHTML = steps.map(t => `<li>${t}</li>`).join('');
+    const src = s.url || 'data/2330_TW.csv';
+    $('a-code').textContent =
+`import numpy as np, pandas as pd
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
+
+df = pd.read_csv("${src}", parse_dates=["${D.dateCol}"]).sort_values("${D.dateCol}")
+s = df["${D.col}"].astype(float).reset_index(drop=True)
+
+P_MAX, p = ${s.maxP}, ${s.p}
+X = pd.concat({f"lag_{l}": s.shift(l) for l in range(1, p + 1)}, axis=1)
+data = pd.concat([X, s.rename("y")], axis=1).iloc[P_MAX:]
+
+n_test = round(len(data) * ${s.testFrac})          # 時間序列：不打亂
+train, test = data.iloc[:-n_test], data.iloc[-n_test:]
+model = LinearRegression().fit(train.drop(columns="y"), train["y"])
+pred = model.predict(test.drop(columns="y"))
+
+print("RMSE", np.sqrt(mean_squared_error(test["y"], pred)))
+print("naive RMSE", np.sqrt(mean_squared_error(test["y"], test["lag_1"])))`;
+  }
+
+  function renderARModel() {
+    const s = state.ar, D = s.data;
+    const pIn = $('a-p'); pIn.max = s.maxP; pIn.value = s.p; $('a-p-out').textContent = s.p;
+    const ps = s.sweep.map(f => f.p);
+    let bestTest = s.sweep[0]; s.sweep.forEach(f => { if (f.test.rmse < bestTest.test.rmse) bestTest = f; });
+    $('a-p-note').innerHTML = `用訓練集 AIC 自動選出 <b>p = ${s.bestP}</b>（不看測試集，避免資料洩漏）。測試 RMSE 最低出現在 p = ${bestTest.p}（${fmt(bestTest.test.rmse)}）。拖曳滑桿可比較不同 p。`;
+    const ptR = ps.map(p => (p === s.p ? 6 : 3));
+    chart('c-a-rmse', {
+      type: 'line',
+      data: { labels: ps, datasets: [
+        line('Test RMSE', s.sweep.map(f => f.test.rmse), css('--test'), { pointRadius: ptR }),
+        line('Train RMSE', s.sweep.map(f => f.train.rmse), css('--train')),
+        line('Naive（明天=今天）', s.sweep.map(f => f.naive.rmse), css('--naive'), { borderDash: [5, 4], pointRadius: 0 })
+      ] },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { title: { display: true, text: 'Lag order p' } }, y: { title: { display: true, text: 'RMSE' } } } }
+    });
+    chart('c-a-aic', {
+      type: 'line',
+      data: { labels: ps, datasets: [line('AIC', s.sweep.map(f => f.model.aic), css('--cv'), { pointRadius: ps.map(p => (p === s.bestP ? 6 : 3)) })] },
+      options: { plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: 'Lag order p' } }, y: { title: { display: true, text: 'AIC' } } } }
+    });
+    renderAREval();
+  }
+
+  function renderAREval() {
+    const s = state.ar, D = s.data, f = s.sweep[s.p - 1], m = f.model;
+    $('a-eval-title').textContent = `AR(${s.p}) · 測試 ${f.nTest} 期`;
+    const beat = f.test.rmse < f.naive.rmse;
+    $('a-metrics').innerHTML = kpi('Test RMSE', fmt(f.test.rmse), `Train ${fmt(f.train.rmse)}`, beat ? 'good' : '') +
+      kpi('Naive RMSE', fmt(f.naive.rmse), '明天 = 今天') + kpi('Test MAE', fmt(f.test.mae)) + kpi('Test MAPE', fmt(f.test.mape, 2) + '%') +
+      kpi('Test R²', f.test.r2.toFixed(4), '水準值 R² 通常偏高') + kpi('方向準確率', fmt(f.dirAcc, 1) + '%', '預測漲跌方向正確比例');
+    const v = $('a-verdict');
+    if (beat) { v.className = 'callout good'; v.innerHTML = `AR(${s.p}) 的測試 RMSE 比 naive 低 ${fmt(100 * (1 - f.test.rmse / f.naive.rmse), 1)}%，過去價格提供了些微額外資訊。`; }
+    else { v.className = 'callout warn'; v.innerHTML = `AR(${s.p}) 的測試 RMSE（${fmt(f.test.rmse)}）<b>沒有打敗</b> naive 基準（${fmt(f.naive.rmse)}）。φ₁ ≈ ${m.beta[1].toFixed(3)} 接近 1，股價接近隨機漫步（random walk）：最好的預測幾乎就是今天的價格。這也是「效率市場」的典型結果。R² 很高只是因為價格水準本身高度自相關，不代表模型有預測力。`; }
+    $('a-eq').innerHTML = `<span class="y">ŷ<sub>t</sub></span> = ${fmtAuto(m.beta[0])}` + m.beta.slice(1).map((b, i) => ` ${b < 0 ? '−' : '+'} ${Math.abs(b).toFixed(4)} × y<sub>t−${i + 1}</sub>`).join('');
+    $('a-coef').innerHTML = '<thead><tr><th>變數</th><th>係數</th><th>Std. Error</th><th>t</th><th>p-value</th><th>顯著</th><th>95% CI</th></tr></thead><tbody>' +
+      m.rows.map((r, i) => `<tr><td class="txt">${i === 0 ? 'Intercept (c)' : 'lag_' + i + '（y<sub>t−' + i + '</sub>）'}</td><td>${fmtAuto(r.coef)}</td><td>${fmtAuto(r.se)}</td><td>${fmt(r.t, 3)}</td><td>${fmtP(r.p)}</td><td>${sigPill(r.p)}</td><td>[${fmtAuto(r.lo)}, ${fmtAuto(r.hi)}]</td></tr>`).join('') + '</tbody>';
+    const labels = f.tTest.map(t => ymd(D.dates[t]));
+    chart('c-a-test', {
+      type: 'line',
+      data: { labels, datasets: [
+        line('實際', f.yte, css('--ink'), { pointRadius: 2, borderWidth: 2 }),
+        line(`AR(${s.p}) 預測`, f.pte, css('--test'), { pointRadius: 2, borderWidth: 2 }),
+        line('Naive', f.tTest.map(t => D.y[t - 1]), css('--naive'), { pointRadius: 0, borderDash: [5, 4], borderWidth: 1.5 })
+      ] },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } }, y: { title: { display: true, text: D.col } } } }
+    });
+    renderARForecast();
+  }
+
+  function nextBizDays(last, h, daily) {
+    const out = []; let d = new Date(last);
+    while (out.length < h) {
+      if (daily) { d = new Date(d.getTime() + 864e5); if (d.getUTCDay() === 0 || d.getUTCDay() === 6) continue; }
+      else d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()));
+      out.push(new Date(d));
+    }
+    return out;
+  }
+
+  function renderARForecast() {
+    const s = state.ar, D = s.data, f = s.sweep[s.p - 1];
+    $('a-h-out').textContent = s.h;
+    // 部署：用全部資料重新擬合
+    const L = ML.lagMatrix(D.y, s.p, s.maxP);
+    const fullModel = ML.ols(L.X, L.y);
+    const fc = ML.forecastAR(D.y, fullModel, s.p, s.h);
+    const n = D.y.length, gaps = []; for (let i = Math.max(1, n - 30); i < n; i++) gaps.push((D.dates[i] - D.dates[i - 1]) / 864e5);
+    const daily = ML.mean(gaps) < 10;
+    const fdates = nextBizDays(D.dates[n - 1], s.h, daily);
+    const hist = Math.min(60, n);
+    const labels = D.dates.slice(n - hist).map(ymd).concat(fdates.map(ymd));
+    const pad = Array(hist - 1).fill(null);
+    const lastV = D.y[n - 1];
+    chart('c-a-fc', {
+      type: 'line',
+      data: { labels, datasets: [
+        line('歷史', D.y.slice(n - hist).concat(Array(s.h).fill(null)), css('--ink'), { pointRadius: 0, borderWidth: 2 }),
+        line('95% 上界', pad.concat([lastV], fc.map(x => x.hi)), css('--test'), { pointRadius: 0, borderWidth: 0, fill: '+1', backgroundColor: hexA(css('--test'), 0.15) }),
+        line('95% 下界', pad.concat([lastV], fc.map(x => x.lo)), css('--test'), { pointRadius: 0, borderWidth: 0 }),
+        line(`AR(${s.p}) 預測`, pad.concat([lastV], fc.map(x => x.mean)), css('--test'), { pointRadius: 2, borderWidth: 2, borderDash: [6, 3] })
+      ] },
+      options: { interaction: { mode: 'index', intersect: false }, plugins: { legend: { labels: { filter: it => !/界/.test(it.text) } } }, scales: { x: { ticks: { maxTicksLimit: 8, maxRotation: 0 } }, y: { title: { display: true, text: D.col } } } }
+    });
+    $('a-fc-table').innerHTML = '<thead><tr><th>步數</th><th>日期</th><th>預測值</th><th>95% 下界</th><th>95% 上界</th><th>相對最新值</th></tr></thead><tbody>' +
+      fc.map((x, i) => `<tr><td>t+${i + 1}</td><td>${ymd(fdates[i])}</td><td>${fmt(x.mean)}</td><td>${fmt(x.lo)}</td><td>${fmt(x.hi)}</td><td>${x.mean >= lastV ? '+' : ''}${fmt(100 * (x.mean / lastV - 1), 2)}%</td></tr>`).join('') + '</tbody>';
+  }
+  function hexA(c, a) {
+    const m = c.match(/^#([0-9a-f]{6})$/i); if (!m) return c;
+    const v = parseInt(m[1], 16); return `rgba(${v >> 16},${(v >> 8) & 255},${v & 255},${a})`;
+  }
+
+  /* ====================================================================
+   * 資料載入 / 事件
+   * ==================================================================== */
+  function renderChips() {
+    $('ds-chips').innerHTML = '<span class="eyebrow" style="align-self:center">範例：</span>' + SOURCES[state.problem].map((c, i) => `<button type="button" class="chip" data-chip="${i}">${esc(c.label)}</button>`).join('');
+  }
+  function useText(text, label, url) {
+    const raw = ML.parseCSV(text);
+    if (state.problem === 'mlr') loadMLR(raw, label, url); else loadAR(raw, label, url);
+  }
+  function loadBuiltin(which) {
+    const D = window.DEFAULT_DATA;
+    if (which === 'startups') { $('ds-url').value = SOURCES.mlr[0].url; state.problem === 'mlr' && useText(D.startups, '50_Startups.csv（內建，課程資料夾版本）', SOURCES.mlr[0].url); }
+    else { $('ds-url').value = ''; useText(D.tsmc, '2330.TW 台積電（內建 TWSE 快照）', ''); }
+  }
+  async function loadUrl(url) {
+    url = normalizeUrl(url);
+    if (!/^https?:\/\//i.test(url)) { setStatus('請輸入以 http(s):// 開頭的 CSV 網址。', 'err'); return; }
+    $('ds-url').value = url;
+    setStatus('下載中… ' + esc(url), 'busy');
+    const btn = $('ds-load'); btn.disabled = true;
+    try {
+      const text = await fetchText(url);
+      if (/^\s*</.test(text)) throw new Error('這個網址回傳的是網頁（HTML），不是 CSV。GitHub 請用 Raw 連結。');
+      useText(text, decodeURIComponent(url.split('/').pop().split('?')[0]) || url, url);
+    } catch (e) { setStatus(esc(e.message), 'err'); }
+    finally { btn.disabled = false; }
+  }
+  async function loadFinMind() {
+    const id = $('stock-id').value.trim();
+    if (!/^\d{4,6}[A-Z]?$/i.test(id)) { setStatus('請輸入台股代號，例如 2330、2317、0050。', 'err'); return; }
+    const days = +$('stock-days').value;
+    const start = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+    const url = `https://api.finmindtrade.com/api/v4/data?dataset=TaiwanStockPrice&data_id=${id}&start_date=${start}`;
+    setStatus(`向 FinMind 抓取 ${esc(id)} 自 ${start} 起的日收盤價…`, 'busy');
+    const btn = $('stock-live'); btn.disabled = true;
+    try {
+      const js = JSON.parse(await fetchText(url));
+      if (!js.data || !js.data.length) throw new Error('FinMind 沒有回傳資料（' + (js.msg || '代號錯誤或超過免費額度') + '）。');
+      const csv = 'Date,Close,Open,High,Low,Volume\n' + js.data.map(r => [r.date, r.close, r.open, r.max, r.min, r.Trading_Volume].join(',')).join('\n');
+      useText(csv, `${id}.TW（FinMind 即時，${js.data.length} 日）`, url);
+    } catch (e) { setStatus(esc(e.message) + ' 已保留目前的資料。', 'err'); }
+    finally { btn.disabled = false; }
+  }
+
+  function switchProblem(p) {
+    state.problem = p;
+    $('problem').value = p;
+    $('panel-mlr').hidden = p !== 'mlr';
+    $('panel-ar').hidden = p !== 'ar';
+    $('stock-row').hidden = p !== 'ar';
+    $('ds-hint').innerHTML = p === 'mlr'
+      ? '貼上任意 CSV 網址（GitHub raw、gist…）或上傳檔案。會自動偵測數值 / 類別欄並做 one-hot，目標變數可在步驟 1 改選。'
+      : '貼上含「日期欄 + 數值欄」的 CSV 網址或上傳檔案（Yahoo Finance 匯出的 CSV 可直接用），或輸入台股代號即時抓取。';
+    $('ds-url').value = p === 'mlr' ? (state.mlr.url || '') : (state.ar.url || '');
+    renderChips();
+    const s = state[p];
+    if (!s.raw) loadBuiltin(p === 'mlr' ? 'startups' : 'tsmc');
+    else { setStatus(`目前資料：<b>${esc(s.label)}</b>`, 'ok'); rerenderCharts(); }
+    try { localStorage.setItem('dic2-problem', p); } catch (e) { /* ignore */ }
+    try { history.replaceState(null, '', '#' + p); } catch (e) { /* ignore */ }
+  }
+  function rerenderCharts() {
+    if (state.problem === 'mlr' && state.mlr.data) { renderMLRUnderstanding(); renderMLRModel(); }
+    if (state.problem === 'ar' && state.ar.data) { renderARUnderstanding(); renderARModel(); }
+  }
+
+  function bind() {
+    $('problem').addEventListener('change', e => switchProblem(e.target.value));
+    $('ds-form').addEventListener('submit', e => { e.preventDefault(); loadUrl($('ds-url').value); });
+    $('ds-file').addEventListener('change', e => {
+      const f = e.target.files[0]; if (!f) return;
+      const rd = new FileReader();
+      rd.onload = () => { try { state[state.problem].url = ''; useText(rd.result, f.name, ''); } catch (err) { setStatus(esc(err.message), 'err'); } };
+      rd.readAsText(f); e.target.value = '';
+    });
+    $('ds-chips').addEventListener('click', e => {
+      const b = e.target.closest('[data-chip]'); if (!b) return;
+      const c = SOURCES[state.problem][+b.dataset.chip];
+      if (c.builtin) loadBuiltin(c.builtin); else loadUrl(c.url);
+    });
+    $('stock-live').addEventListener('click', loadFinMind);
+    // MLR controls
+    $('m-target').addEventListener('change', e => { state.mlr.target = e.target.value; rebuildMLR(); });
+    $('m-test').addEventListener('input', e => { state.mlr.testSize = +e.target.value; rebuildMLR(); });
+    $('m-seed').addEventListener('change', e => { const v = Math.max(0, Math.min(4294967295, Math.floor(+e.target.value || 0))); e.target.value = v; state.mlr.seed = v; rebuildMLR(); });
+    $('m-crit').addEventListener('change', e => { state.mlr.criterion = e.target.value; state.mlr.k = null; renderMLRModel(); });
+    $('m-algos').addEventListener('click', e => { const b = e.target.closest('[data-algo]'); if (!b || b.disabled) return; state.mlr.algo = b.dataset.algo; state.mlr.k = null; setBusy(() => renderMLRModel()); });
+    $('m-k').addEventListener('input', e => { state.mlr.k = +e.target.value; renderMLRModel(); });
+    $('m-results').addEventListener('click', e => {
+      const tr = e.target.closest('tr'); if (!tr) return;
+      if (tr.dataset.k) { state.mlr.k = +tr.dataset.k; renderMLRModel(); }
+      else if (tr.dataset.algo) { state.mlr.algo = tr.dataset.algo; state.mlr.k = null; renderMLRModel(); }
+    });
+    $('m-pred-form').addEventListener('input', updatePrediction);
+    $('m-dl').addEventListener('click', () => {
+      try {
+        const blob = new Blob([$('m-json').textContent], { type: 'application/json' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'mlr_model.json'; document.body.appendChild(a); a.click(); a.remove();
+      } catch (err) { /* sandboxed */ }
+    });
+    // AR controls
+    $('a-col').addEventListener('change', e => { state.ar.col = e.target.value; state.ar.p = null; rebuildAR(); });
+    $('a-test').addEventListener('input', e => { state.ar.testFrac = +e.target.value; rebuildAR(); });
+    $('a-p').addEventListener('input', e => { state.ar.p = +e.target.value; renderARModel(); renderARPrep(); });
+    $('a-h').addEventListener('input', e => { state.ar.h = +e.target.value; renderARForecast(); });
+    // copy
+    document.addEventListener('click', e => {
+      const b = e.target.closest('[data-copy]'); if (!b) return;
+      const el = $(b.dataset.copy), txt = el.textContent;
+      const done = () => { const o = b.textContent; b.textContent = '已複製'; setTimeout(() => { b.textContent = o; }, 1200); };
+      const sel = () => { const r = document.createRange(); r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+      try { navigator.clipboard.writeText(txt).then(done, sel); } catch (err) { sel(); }
+    });
+    // theme change → redraw charts with new token colors
+    try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', rerenderCharts); } catch (e) { /* old browsers */ }
+    new MutationObserver(rerenderCharts).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  }
+  function setBusy(fn) { document.body.style.cursor = 'progress'; setTimeout(() => { try { fn(); } finally { document.body.style.cursor = ''; } }, 10); }
+
+  function start() {
+    bind();
+    let p = 'mlr';
+    const h = (location.hash || '').replace('#', '');
+    if (h === 'ar' || h === 'mlr') p = h;
+    else { try { const v = localStorage.getItem('dic2-problem'); if (v === 'ar' || v === 'mlr') p = v; } catch (e) { /* ignore */ } }
+    switchProblem(p);
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+})();
+</script>
+</body>
+</html>
